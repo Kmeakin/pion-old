@@ -1,0 +1,144 @@
+use scoped_arena::Scope;
+
+use pion_source::location::{BytePos, ByteRange};
+use crate::tokens::Token;
+use crate::syntax::*;
+
+grammar<'arena, 'source>(
+    scope: &'arena Scope<'arena>,
+    errors: &mut Vec<Error>,
+);
+
+extern {
+    type Location = BytePos;
+    type Error = crate::tokens::Error;
+
+    enum Token<'source> {
+        "Ident" => Token::Ident(<&'source str>),
+        "DecInt" => Token::DecInt(<&'source str>),
+        "BinInt" => Token::BinInt(<&'source str>),
+        "HexInt" => Token::HexInt(<&'source str>),
+
+        "def" => Token::KwDef,
+        "false" => Token::KwFalse,
+        "fun" => Token::KwFun,
+        "let" => Token::KwLet,
+        "true" => Token::KwTrue,
+
+        "_" => Token::Underscore,
+        "->" => Token::ThinArrow,
+        "," => Token::Comma,
+        ";" => Token::Semicolon,
+        ":" => Token::Colon,
+        "(" => Token::LParen,
+        ")" => Token::RParen,
+        "=" => Token::Eq,
+        "=>" => Token::FatArrow,
+    }
+}
+
+pub Def: Def<'arena> = {
+    <start: @L> "def" <name: Ident> <r#type: Ann?> "=" <expr: Expr> ";" <end: @R> =>
+        Def {
+            extra: ByteRange::new(start, end),
+            name,
+            r#type: r#type.map(|r#type| scope.to_scope(r#type) as &_),
+            expr,
+        },
+}
+
+
+pub Expr: Expr<'arena> = {
+    LetExpr => <>,
+}
+
+LetExpr: Expr<'arena> = {
+    <start: @L> "let" <pat: Pat> <r#type: Ann?> "=" <rhs: Expr> ";" <body: Expr> <end: @R> =>
+        Expr::Let(
+            ByteRange::new(start, end),
+            scope.to_scope(pat),
+            r#type.map(|r#type| scope.to_scope(r#type) as &_),
+            scope.to_scope(rhs), scope.to_scope(body)
+        ),
+    FunExpr => <>,
+}
+
+FunExpr: Expr<'arena> = {
+    <start: @L> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => Expr::Arrow(ByteRange::new(start, end), scope.to_scope(arg), scope.to_scope(body)),
+    <start: @L> "fun" <params: Param+> "->" <body: FunExpr> <end: @R> => Expr::FunType(ByteRange::new(start, end), scope.to_scope_from_iter(params), scope.to_scope(body)),
+    <start: @L> "fun" <params: Param+> "=>" <body: LetExpr> <end: @R> => Expr::FunLit(ByteRange::new(start, end), scope.to_scope_from_iter(params), scope.to_scope(body)),
+    AppExpr => <>,
+}
+
+AppExpr: Expr<'arena> = {
+    <start: @L> <fun: AtomExpr> <arg: AtomExpr> <end: @R> => Expr::FunApp(ByteRange::new(start, end), scope.to_scope(fun), scope.to_scope(arg)),
+    AtomExpr => <>,
+}
+
+AtomExpr: Expr<'arena> = {
+    <start: @L> "(" <expr: Expr> ")" <end: @R> => Expr::Paren(ByteRange::new(start, end), scope.to_scope(expr)),
+    <start: @L> <lit: Lit> <end: @R> => Expr::Lit(ByteRange::new(start, end), lit),
+    <start: @L> <ident: Ident> <end: @R> => Expr::Ident(ByteRange::new(start, end), ident),
+}
+
+Param: Param<'arena> = {
+    <pat: Pat> => Param {pat, r#type: None},
+    "(" <pat: Pat> <r#type: Ann> ")" => Param {pat, r#type: Some(r#type)},
+}
+
+pub Pat: Pat<'arena> = {
+    <start: @L> "(" <pat: Pat> ")" <end: @R> => Pat::Paren(ByteRange::new(start, end), scope.to_scope(pat)),
+    <start: @L> <lit: Lit> <end: @R> => Pat::Lit(ByteRange::new(start, end), lit),
+    <start: @L> <ident: Ident> <end: @R> => Pat::Ident(ByteRange::new(start, end), ident),
+    <start: @L> "_" <end: @R> => Pat::Underscore(ByteRange::new(start, end)),
+}
+
+pub Lit: Lit = {
+    <start: @L> "true" <end: @R> => Lit::Bool(ByteRange::new(start, end), true),
+    <start: @L> "false" <end: @R> => Lit::Bool(ByteRange::new(start, end), false),
+    <start: @L> <int: Int> <end: @R> => Lit::Int(ByteRange::new(start, end), int),
+}
+
+Int: u32 = {
+    <start: @L> <str: "DecInt"> <end: @R> => match parse_binary_integer(str) {
+        Ok(int) => int,
+        Err(err) => {
+            errors.push(Error::IntLit(ByteRange::new(start, end), err));
+            0
+        }
+    },
+    <start: @L> <str: "BinInt"> <end: @R> => match parse_binary_integer(str) {
+        Ok(int) => int,
+        Err(err) => {
+            errors.push(Error::IntLit(ByteRange::new(start, end), err));
+            0
+        }
+    },
+    <start: @L> <str: "HexInt"> <end: @R> => match parse_hexadecimal_integer(str) {
+        Ok(int) => int,
+        Err(err) => {
+            errors.push(Error::IntLit(ByteRange::new(start, end), err));
+            0
+        }
+    },
+}
+
+Ann: Expr<'arena> = {
+    ":" <expr: Expr> => expr,
+}
+
+Ident: String = {
+    <ident: "Ident"> => ident.into(),
+}
+
+Seq<Elem, Sep>: &'arena [Elem] = {
+    <elems: (<Elem> Sep)*> <last: Elem?> => {
+        scope.to_scope_from_iter(elems.into_iter().chain(last))
+    }
+};
+
+Seq1<Elem, Sep>: &'arena [Elem] = {
+    <first: Elem> <elems: (Sep <Elem>)*> Sep? => {
+        scope.to_scope_from_iter(std::iter::once(first).chain(elems))
+    },
+};
