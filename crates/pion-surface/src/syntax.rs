@@ -4,6 +4,8 @@ use scoped_arena::Scope;
 
 use crate::tokens::{self, Token};
 
+pub type Symbol = ustr::Ustr;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module<'arena, Extra = ByteRange> {
     pub items: &'arena [Item<'arena, Extra>],
@@ -17,7 +19,7 @@ pub enum Item<'arena, Extra = ByteRange> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Def<'arena, Extra = ByteRange> {
     pub extra: Extra,
-    pub name: String,
+    pub name: Symbol,
     pub r#type: Option<&'arena Expr<'arena, Extra>>,
     pub expr: Expr<'arena, Extra>,
 }
@@ -27,7 +29,7 @@ pub enum Expr<'arena, Extra = ByteRange> {
     Error(Extra),
     Paren(Extra, &'arena Self),
     Lit(Extra, Lit),
-    Ident(Extra, String),
+    Ident(Extra, Symbol),
     Let(
         Extra,
         &'arena Pat<'arena, Extra>,
@@ -70,7 +72,7 @@ pub struct Param<'arena, Extra = ByteRange> {
 pub enum Pat<'arena, Extra = ByteRange> {
     Paren(Extra, &'arena Self),
     Lit(Extra, Lit),
-    Ident(Extra, String),
+    Ident(Extra, Symbol),
     Underscore(Extra),
 }
 
@@ -194,8 +196,8 @@ mod tests {
 
     #[test]
     fn pat_size() {
-        assert_eq!(size_of::<Pat<()>>(), 32);
-        assert_eq!(size_of::<Pat<ByteRange>>(), 40);
+        assert_eq!(size_of::<Pat<()>>(), 16);
+        assert_eq!(size_of::<Pat<ByteRange>>(), 24);
     }
 
     #[test]

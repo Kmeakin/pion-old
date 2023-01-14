@@ -127,7 +127,7 @@ Ann: Expr<'arena> = {
     ":" <expr: Expr> => expr,
 }
 
-Ident: String = {
+Ident: Symbol = {
     <ident: "Ident"> => ident.into(),
 }
 
