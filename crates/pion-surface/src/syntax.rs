@@ -32,15 +32,12 @@ pub enum Expr<'arena, Extra = ByteRange> {
     Ident(Extra, Symbol),
     Let(
         Extra,
-        &'arena Pat<'arena, Extra>,
-        Option<&'arena Self>,
-        &'arena Self,
-        &'arena Self,
+        &'arena (Pat<'arena, Extra>, Option<Self>, Self, Self),
     ),
-    Arrow(Extra, &'arena Self, &'arena Self),
+    Arrow(Extra, &'arena (Self, Self)),
     FunType(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunLit(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
-    FunApp(Extra, &'arena Self, &'arena Self),
+    FunApp(Extra, &'arena Self, &'arena [Self]),
 }
 
 impl<'arena> Expr<'arena, ByteRange> {
@@ -190,8 +187,8 @@ mod tests {
 
     #[test]
     fn expr_size() {
-        assert_eq!(size_of::<Expr<()>>(), 40);
-        assert_eq!(size_of::<Expr<ByteRange>>(), 48);
+        assert_eq!(size_of::<Expr<()>>(), 32);
+        assert_eq!(size_of::<Expr<ByteRange>>(), 40);
     }
 
     #[test]

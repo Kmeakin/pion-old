@@ -56,22 +56,20 @@ LetExpr: Expr<'arena> = {
     <start: @L> "let" <pat: Pat> <r#type: Ann?> "=" <rhs: Expr> ";" <body: Expr> <end: @R> =>
         Expr::Let(
             ByteRange::new(start, end),
-            scope.to_scope(pat),
-            r#type.map(|r#type| scope.to_scope(r#type) as &_),
-            scope.to_scope(rhs), scope.to_scope(body)
+            scope.to_scope((pat, r#type, rhs, body)),
         ),
     FunExpr => <>,
 }
 
 FunExpr: Expr<'arena> = {
-    <start: @L> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => Expr::Arrow(ByteRange::new(start, end), scope.to_scope(arg), scope.to_scope(body)),
+    <start: @L> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => Expr::Arrow(ByteRange::new(start, end), scope.to_scope((arg, body))),
     <start: @L> "fun" <params: Param+> "->" <body: FunExpr> <end: @R> => Expr::FunType(ByteRange::new(start, end), scope.to_scope_from_iter(params), scope.to_scope(body)),
     <start: @L> "fun" <params: Param+> "=>" <body: LetExpr> <end: @R> => Expr::FunLit(ByteRange::new(start, end), scope.to_scope_from_iter(params), scope.to_scope(body)),
     AppExpr => <>,
 }
 
 AppExpr: Expr<'arena> = {
-    <start: @L> <fun: AtomExpr> <arg: AtomExpr> <end: @R> => Expr::FunApp(ByteRange::new(start, end), scope.to_scope(fun), scope.to_scope(arg)),
+    <start: @L> <fun: AtomExpr> <args: AtomExpr+> <end: @R> => Expr::FunApp(ByteRange::new(start, end), scope.to_scope(fun), scope.to_scope_from_iter(args)),
     AtomExpr => <>,
 }
 
