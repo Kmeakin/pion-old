@@ -82,6 +82,10 @@ pub enum Lit<Extra = ByteRange> {
 pub fn parse_decimal_integer(input: &str) -> Result<u32, lexical::Error> {
     const FORMAT: u128 = lexical::NumberFormatBuilder::new()
         .digit_separator(std::num::NonZeroU8::new(b'_'))
+        .consecutive_digit_separator(true)
+        .internal_digit_separator(true)
+        .trailing_digit_separator(true)
+        .radix(10)
         .build();
     lexical::parse_with_options::<_, _, FORMAT>(input, &lexical::ParseIntegerOptions::new())
 }
@@ -89,6 +93,9 @@ pub fn parse_decimal_integer(input: &str) -> Result<u32, lexical::Error> {
 pub fn parse_binary_integer(input: &str) -> Result<u32, lexical::Error> {
     const FORMAT: u128 = lexical::NumberFormatBuilder::new()
         .digit_separator(std::num::NonZeroU8::new(b'_'))
+        .consecutive_digit_separator(true)
+        .internal_digit_separator(true)
+        .trailing_digit_separator(true)
         .radix(2)
         .build();
     lexical::parse_with_options::<_, _, FORMAT>(input, &lexical::ParseIntegerOptions::new())
@@ -97,7 +104,10 @@ pub fn parse_binary_integer(input: &str) -> Result<u32, lexical::Error> {
 pub fn parse_hexadecimal_integer(input: &str) -> Result<u32, lexical::Error> {
     const FORMAT: u128 = lexical::NumberFormatBuilder::new()
         .digit_separator(std::num::NonZeroU8::new(b'_'))
-        .radix(16)
+        .consecutive_digit_separator(true)
+        .internal_digit_separator(true)
+        .trailing_digit_separator(true)
+        .radix(2)
         .build();
     lexical::parse_with_options::<_, _, FORMAT>(input, &lexical::ParseIntegerOptions::new())
 }

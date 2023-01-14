@@ -98,7 +98,7 @@ pub Lit: Lit = {
 }
 
 Int: u32 = {
-    <start: @L> <str: "DecInt"> <end: @R> => match parse_binary_integer(str) {
+    <start: @L> <str: "DecInt"> <end: @R> => match parse_decimal_integer(str) {
         Ok(int) => int,
         Err(err) => {
             errors.push(Error::IntLit(ByteRange::new(start, end), err));
