@@ -17,7 +17,7 @@ pub struct ElabCtx<'arena> {
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
-    errors: Vec<Error>,
+    pub errors: Vec<Error>,
 }
 
 impl<'arena> ElabCtx<'arena> {
@@ -91,8 +91,6 @@ struct LocalEnv<'arena> {
     /// [evaluation][semantics::EvalEnv::eval].
     values: UniqueEnv<Value<'arena>>,
 }
-
-
 
 impl<'arena> LocalEnv<'arena> {
     /// Get the length of the local environment.
@@ -187,14 +185,13 @@ impl<'arena> MetaEnv<'arena> {
     }
 }
 
-
-
 #[derive(Debug, Copy, Clone)]
 enum MetaSource {
     PatType(ByteRange),
 }
 
-enum Error {
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Error {
     UnboundName {
         range: ByteRange,
         name: Symbol,
