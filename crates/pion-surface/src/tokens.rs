@@ -95,10 +95,10 @@ impl Error {
     }
 }
 
-pub fn tokens<'src>(
-    input: InputString<'src>,
-) -> impl Iterator<Item = Result<(BytePos, Token<'src>, BytePos), Error>> {
-    Lexer::new(*input).spanned().map(|(token, range)| {
+pub fn tokens(
+    input: &InputString,
+) -> impl Iterator<Item = Result<(BytePos, Token, BytePos), Error>> {
+    Lexer::new(input.as_str()).spanned().map(|(token, range)| {
         let start = BytePos::truncate(range.start);
         let end = BytePos::truncate(range.end);
         match token {

@@ -65,7 +65,7 @@ impl<'arena> Expr<'arena, ByteRange> {
         errors: &mut Vec<Error>,
         input: InputString,
     ) -> Self {
-        let tokens = tokens::tokens(input);
+        let tokens = tokens::tokens(&input);
         match crate::grammar::ExprParser::new().parse(scope, errors, tokens) {
             Ok(expr) => expr,
             Err(err) => {

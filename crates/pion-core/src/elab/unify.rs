@@ -99,6 +99,7 @@ impl PartialRenaming {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Error {
     /// A known part of one value failed to match with a known part of the other
     /// value that we are comparing against.
@@ -120,7 +121,7 @@ impl From<RenameError> for Error {
 }
 
 /// An error that was found in the spine of a unification problem.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SpineError {
     /// A local variable appeared multiple times in the spine of a unification
     /// problem.
@@ -170,7 +171,7 @@ pub enum SpineError {
 }
 
 /// An error that occurred when renaming the solution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RenameError {
     /// A free local variable in the compared value does not occur in the
     /// problem spine.

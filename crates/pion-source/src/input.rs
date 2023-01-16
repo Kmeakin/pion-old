@@ -3,12 +3,12 @@ use std::ops::Deref;
 
 pub const MAX_LENGTH: usize = u32::MAX as usize;
 
-pub struct InputString<'src> {
-    string: &'src str,
+pub struct InputString {
+    string: String,
 }
 
-impl<'string> InputString<'string> {
-    pub fn new(string: &'string str) -> Result<Self, TooBigError> {
+impl InputString {
+    pub fn new(string: String) -> Result<Self, TooBigError> {
         match string.len() <= MAX_LENGTH {
             true => Ok(Self { string }),
             false => Err(TooBigError {
@@ -18,8 +18,8 @@ impl<'string> InputString<'string> {
     }
 }
 
-impl<'string> Deref for InputString<'string> {
-    type Target = &'string str;
+impl Deref for InputString {
+    type Target = String;
     fn deref(&self) -> &Self::Target { &self.string }
 }
 

@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.1.1", features = ["derive"] }
+pion-core = { version = "0.1.0", path = "../pion-core" }
+pion-source = { version = "0.1.0", path = "../pion-source" }
+pion-surface = { version = "0.1.0", path = "../pion-surface" }
+scoped-arena = "0.4.1"
