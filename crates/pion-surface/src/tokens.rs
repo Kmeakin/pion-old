@@ -90,7 +90,7 @@ pub enum Error {
 impl Error {
     pub fn range(&self) -> ByteRange {
         match self {
-            Error::Unknown(range, ..) => *range,
+            Self::Unknown(range, ..) => *range,
         }
     }
 }

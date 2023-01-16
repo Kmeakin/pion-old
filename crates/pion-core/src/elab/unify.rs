@@ -164,7 +164,8 @@ pub enum SpineError {
     /// all computation in the return type, and the pattern solution is
     /// guaranteed to be well-typed.
     NonLinearSpine(Level),
-    /// A metavariable was found in the problem spine.
+    /// An eliminator was found in the problem spine which was not a
+    /// metavariable.
     NonLocalFunApp,
 }
 
@@ -235,12 +236,12 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
             (Value::Lit(lit1), Value::Lit(lit2)) if lit1 == lit2 => Ok(()),
 
             (Value::Stuck(head1, spine1), Value::Stuck(head2, spine2)) if head1 == head2 => {
-                self.unify_spines(&spine1, &spine2)
+                self.unify_spines(spine1, spine2)
             }
 
             (Value::FunType(_, domain1, body1), Value::FunType(_, domain2, body2))
             | (Value::FunLit(_, domain1, body1), Value::FunLit(_, domain2, body2)) => {
-                self.unify(&domain1, &domain2)?;
+                self.unify(domain1, domain2)?;
                 self.unify_closures(body1, body2)
             }
 
@@ -251,7 +252,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
             // One of the values has a metavariable at its head, so we
             // attempt to solve it using pattern unification.
             (Value::Stuck(Head::Meta(var), spine), other)
-            | (other, Value::Stuck(Head::Meta(var), spine)) => self.solve(*var, spine, &other),
+            | (other, Value::Stuck(Head::Meta(var), spine)) => self.solve(*var, spine, other),
 
             _ => Err(Error::Mismatch),
         }
@@ -412,18 +413,18 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                 };
                 (spine.iter()).try_fold(head, |head, elim| match elim {
                     Elim::FunApp(arg) => {
-                        let arg = self.rename(meta_var, &arg)?;
+                        let arg = self.rename(meta_var, arg)?;
                         Ok(Expr::FunApp(self.scope.to_scope((head, arg))))
                     }
                 })
             }
             Value::FunType(name, domain, body) => {
-                let domain = self.rename(meta_var, &domain)?;
+                let domain = self.rename(meta_var, domain)?;
                 let body = self.rename_closure(meta_var, &body)?;
                 Ok(Expr::FunType(name, self.scope.to_scope((domain, body))))
             }
             Value::FunLit(name, domain, body) => {
-                let domain = self.rename(meta_var, &domain)?;
+                let domain = self.rename(meta_var, domain)?;
                 let body = self.rename_closure(meta_var, &body)?;
                 Ok(Expr::FunLit(name, self.scope.to_scope((domain, body))))
             }

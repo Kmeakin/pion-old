@@ -63,8 +63,14 @@ impl<'arena> ElabCtx<'arena> {
                 let expr = Expr::FunLit(None, scope.to_scope((domain, codomain)));
                 (expr, Type::TYPE)
             }
-            surface::Expr::FunType(_, params, body) => self.synth_fun_type(params, body),
-            surface::Expr::FunLit(_, params, body) => self.synth_fun_lit(params, body),
+            surface::Expr::FunType(_, params, body) => {
+                self.local_env.reserve(params.len());
+                self.synth_fun_type(params, body)
+            }
+            surface::Expr::FunLit(_, params, body) => {
+                self.local_env.reserve(params.len());
+                self.synth_fun_lit(params, body)
+            }
             surface::Expr::FunApp(_, fun, args) => {
                 let scope = self.scope;
                 let (mut expr, mut r#type) = self.synth(fun);
@@ -170,7 +176,7 @@ impl<'arena> ElabCtx<'arena> {
                 match expected {
                     Value::FunType(_, domain, codomain) => {
                         let pat = self.check_ann_pat(&param.pat, &param.r#type, domain);
-                        let param_type_expr = self.quote_env().quote(self.scope, &domain);
+                        let param_type_expr = self.quote_env().quote(self.scope, domain);
                         let name = pat.name();
 
                         let arg = self.local_env.next_var();
@@ -215,6 +221,7 @@ impl<'arena> ElabCtx<'arena> {
                 )
             }
             (surface::Expr::FunLit(range, params, body), _) => {
+                self.local_env.reserve(params.len());
                 self.check_fun_lit(*range, params, body, &expected)
             }
             _ => {

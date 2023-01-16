@@ -1,4 +1,4 @@
-type RawIdx = usize;
+type RawIdx = u32;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct EnvLen(RawIdx);
@@ -66,7 +66,7 @@ impl<T> UniqueEnv<T> {
     where
         T: Clone,
     {
-        self.entries.resize(usize::from(len.0), elem)
+        self.entries.resize(len.0 as usize, elem)
     }
 
     /// Push `elem` onto the environment.
@@ -109,7 +109,7 @@ impl<T> SliceEnv<T> {
     }
 
     /// Lookup an element in the environment using a level.
-    pub fn get_level(&self, level: Level) -> Option<&T> { self.entries.get(usize::from(level.0)) }
+    pub fn get_level(&self, level: Level) -> Option<&T> { self.entries.get(level.0 as usize) }
 
     /// Lookup an element in the environment using an index.
     pub fn get_index(&self, index: Index) -> Option<&T> {
@@ -118,7 +118,7 @@ impl<T> SliceEnv<T> {
 
     /// Set an element in the environment using a level
     pub fn set_level(&mut self, level: Level, entry: T) {
-        self.entries[usize::from(level.0)] = entry;
+        self.entries[(level.0 as usize)] = entry;
     }
 
     /// Iterate over the elements in the environment.

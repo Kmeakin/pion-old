@@ -118,7 +118,7 @@ impl<Extra> Lit<Extra> {
         Extra: Clone,
     {
         match self {
-            Lit::Bool(range, ..) | Lit::Int(range, ..) => range.clone(),
+            Self::Bool(range, ..) | Self::Int(range, ..) => range.clone(),
         }
     }
 }
@@ -183,12 +183,12 @@ pub enum Error {
 impl Error {
     pub fn range(&self) -> ByteRange {
         match self {
-            Error::Lexer(err) => err.range(),
-            Error::IntLit(range, ..)
-            | Error::InvalidToken(range, ..)
-            | Error::UnrecognizedEOF { range, .. }
-            | Error::UnrecognizedToken { range, .. }
-            | Error::ExtraToken { range, .. } => *range,
+            Self::Lexer(err) => err.range(),
+            Self::IntLit(range, ..)
+            | Self::InvalidToken(range, ..)
+            | Self::UnrecognizedEOF { range, .. }
+            | Self::UnrecognizedToken { range, .. }
+            | Self::ExtraToken { range, .. } => *range,
         }
     }
 

@@ -78,6 +78,7 @@ impl<'arena> ElabCtx<'arena> {
 ///   [`LocalEnv::push_def`] or [`LocalEnv::push_param`].
 /// - On scope exit, it is important to remember to call [`LocalEnv::pop`].
 /// - Multiple bindings can be removed at once with [`LocalEnv::truncate`].
+#[derive(Default)]
 struct LocalEnv<'arena> {
     /// Names of local variables.
     names: UniqueEnv<Option<Symbol>>,
@@ -91,16 +92,7 @@ struct LocalEnv<'arena> {
     values: UniqueEnv<Value<'arena>>,
 }
 
-impl<'arena> Default for LocalEnv<'arena> {
-    fn default() -> Self {
-        Self {
-            names: Default::default(),
-            infos: Default::default(),
-            types: Default::default(),
-            values: Default::default(),
-        }
-    }
-}
+
 
 impl<'arena> LocalEnv<'arena> {
     /// Get the length of the local environment.
@@ -166,6 +158,7 @@ impl<'arena> LocalEnv<'arena> {
 ///
 /// This is used for keeping track of the state of [metavariables] whose
 /// definitions are intended to be found through the use of [unification].
+#[derive(Default)]
 struct MetaEnv<'arena> {
     /// The source of inserted metavariables, used when reporting unsolved
     /// metavariables.
@@ -194,15 +187,7 @@ impl<'arena> MetaEnv<'arena> {
     }
 }
 
-impl<'arena> Default for MetaEnv<'arena> {
-    fn default() -> Self {
-        Self {
-            sources: UniqueEnv::default(),
-            types: UniqueEnv::default(),
-            values: UniqueEnv::default(),
-        }
-    }
-}
+
 
 #[derive(Debug, Copy, Clone)]
 enum MetaSource {

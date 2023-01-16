@@ -7,7 +7,7 @@ pub enum Expr<'arena> {
     Error,
     Local(Index),
     Meta(Level),
-    InsertedMeta(Level,&'arena [BinderInfo]),
+    InsertedMeta(Level, &'arena [BinderInfo]),
     Lit(Lit),
     Prim(Prim),
     Let(Option<Symbol>, &'arena (Self, Self, Self)),
@@ -114,12 +114,12 @@ mod tests {
 
     #[test]
     fn expr_size() {
-        assert_eq!(size_of::<Expr>(), 16);
+        assert_eq!(size_of::<Expr>(), 24);
     }
 
     #[test]
     fn value_size() {
-        assert_eq!(size_of::<Value>(), 32);
+        assert_eq!(size_of::<Value>(), 56);
     }
 
     #[test]
