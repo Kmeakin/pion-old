@@ -29,6 +29,13 @@ pub struct ByteRange {
 
 impl ByteRange {
     pub fn new(start: BytePos, end: BytePos) -> Self { Self { start, end } }
+
+    pub fn merge(this: Self, other: Self) -> Self {
+        Self::new(
+            std::cmp::min(this.start, other.start),
+            std::cmp::max(this.end, other.end),
+        )
+    }
 }
 
 impl fmt::Debug for ByteRange {

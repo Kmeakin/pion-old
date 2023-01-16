@@ -24,7 +24,7 @@ pub struct Def<'arena, Extra = ByteRange> {
     pub expr: Expr<'arena, Extra>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Expr<'arena, Extra = ByteRange> {
     Error(Extra),
     Paren(Extra, &'arena Self),
@@ -38,6 +38,25 @@ pub enum Expr<'arena, Extra = ByteRange> {
     FunType(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunLit(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunApp(Extra, &'arena Self, &'arena [Self]),
+}
+
+impl<'arena, Extra> Expr<'arena, Extra> {
+    pub fn range(&self) -> Extra
+    where
+        Extra: Clone,
+    {
+        match self {
+            Expr::Error(range, ..)
+            | Expr::Paren(range, ..)
+            | Expr::Lit(range, ..)
+            | Expr::Ident(range, ..)
+            | Expr::Let(range, ..)
+            | Expr::Arrow(range, ..)
+            | Expr::FunType(range, ..)
+            | Expr::FunLit(range, ..)
+            | Expr::FunApp(range, ..) => range.clone(),
+        }
+    }
 }
 
 impl<'arena> Expr<'arena, ByteRange> {
@@ -59,13 +78,13 @@ impl<'arena> Expr<'arena, ByteRange> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Param<'arena, Extra = ByteRange> {
     pub pat: Pat<'arena, Extra>,
     pub r#type: Option<Expr<'arena, Extra>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Pat<'arena, Extra = ByteRange> {
     Paren(Extra, &'arena Self),
     Lit(Extra, Lit),
@@ -73,10 +92,35 @@ pub enum Pat<'arena, Extra = ByteRange> {
     Underscore(Extra),
 }
 
+impl<'arena, Extra> Pat<'arena, Extra> {
+    pub fn range(&self) -> Extra
+    where
+        Extra: Clone,
+    {
+        match self {
+            Pat::Paren(range, ..)
+            | Pat::Lit(range, ..)
+            | Pat::Ident(range, ..)
+            | Pat::Underscore(range, ..) => range.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Lit<Extra = ByteRange> {
     Bool(Extra, bool),
     Int(Extra, u32),
+}
+
+impl<Extra> Lit<Extra> {
+    pub fn range(&self) -> Extra
+    where
+        Extra: Clone,
+    {
+        match self {
+            Self::Bool(range, ..) | Self::Int(range, ..) => range.clone(),
+        }
+    }
 }
 
 pub fn parse_decimal_integer(input: &str) -> Result<u32, lexical::Error> {
@@ -139,12 +183,12 @@ pub enum Error {
 impl Error {
     pub fn range(&self) -> ByteRange {
         match self {
-            Error::Lexer(err) => err.range(),
-            Error::IntLit(range, ..)
-            | Error::InvalidToken(range, ..)
-            | Error::UnrecognizedEOF { range, .. }
-            | Error::UnrecognizedToken { range, .. }
-            | Error::ExtraToken { range, .. } => *range,
+            Self::Lexer(err) => err.range(),
+            Self::IntLit(range, ..)
+            | Self::InvalidToken(range, ..)
+            | Self::UnrecognizedEOF { range, .. }
+            | Self::UnrecognizedToken { range, .. }
+            | Self::ExtraToken { range, .. } => *range,
         }
     }
 
