@@ -181,7 +181,7 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn range(&self) -> ByteRange {
+    pub const fn range(&self) -> ByteRange {
         match self {
             Self::Lexer(err) => err.range(),
             Self::IntLit(range, ..)
@@ -192,7 +192,7 @@ impl Error {
         }
     }
 
-    pub fn from_lalrpop<'src>(err: LalrpopParseError<'src>) -> Self {
+    pub fn from_lalrpop(err: LalrpopParseError) -> Self {
         match err {
             LalrpopParseError::InvalidToken { location } => {
                 Self::InvalidToken(ByteRange::new(location, location))

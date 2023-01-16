@@ -33,7 +33,7 @@ pub enum Token<'src> {
     #[token("=>")] FatArrow,
 }
 impl<'src> Token<'src> {
-    pub fn description(&self) -> &'static str {
+    pub const fn description(&self) -> &'static str {
         match self {
             Token::Error => "unknown token",
             Token::Ident(_) => "identifier",
@@ -88,7 +88,7 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn range(&self) -> ByteRange {
+    pub const fn range(&self) -> ByteRange {
         match self {
             Self::Unknown(range, ..) => *range,
         }
