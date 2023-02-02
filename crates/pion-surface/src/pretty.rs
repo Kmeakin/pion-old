@@ -49,7 +49,7 @@ impl<'arena> PrettyCtx<'arena> {
                 .append(self.expr(body)),
             Expr::FunApp(_, fun, args) => self
                 .expr(fun)
-                .append(self.intersperse(args.iter().map(|arg| self.expr(arg)), self.space())),
+                .append(self.concat(args.iter().map(|arg| self.space().append(self.expr(arg))))),
         }
     }
 
