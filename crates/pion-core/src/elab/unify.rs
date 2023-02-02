@@ -220,7 +220,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         }
     }
 
-    fn elim_env(&self) -> ElimEnv<'arena, '_> { ElimEnv::new(self.meta_values) }
+    fn elim_env(&self) -> ElimEnv<'arena, '_> { ElimEnv::new(self.scope, self.meta_values) }
 
     /// Unify two values, updating the solution environment if necessary.
     pub fn unify(&mut self, value1: &Value<'arena>, value2: &Value<'arena>) -> Result<(), Error> {
@@ -228,8 +228,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
             return Ok(());
         }
 
-        let value1 = self.elim_env().update_metas(self.scope, value1);
-        let value2 = self.elim_env().update_metas(self.scope, value2);
+        let value1 = self.elim_env().update_metas(value1);
+        let value2 = self.elim_env().update_metas(value2);
 
         match (&value1, &value2) {
             _ if value1.is_error() || value2.is_error() => Ok(()),
@@ -285,12 +285,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     ) -> Result<(), Error> {
         let var = Value::local(self.local_env.next_level());
 
-        let value1 = self
-            .elim_env()
-            .apply_closure(self.scope, closure1.clone(), var.clone());
-        let value2 = self
-            .elim_env()
-            .apply_closure(self.scope, closure2.clone(), var.clone());
+        let value1 = self.elim_env().apply_closure(closure1.clone(), var.clone());
+        let value2 = self.elim_env().apply_closure(closure2.clone(), var.clone());
 
         self.local_env.push();
         let result = self.unify(&value1, &value2);
@@ -310,12 +306,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         value: &Value<'arena>,
     ) -> Result<(), Error> {
         let var = Value::local(self.local_env.next_level());
-        let value1 = self
-            .elim_env()
-            .apply_closure(self.scope, body.clone(), var.clone());
-        let value2 = self
-            .elim_env()
-            .fun_app(self.scope, value.clone(), var.clone());
+        let value1 = self.elim_env().apply_closure(body.clone(), var.clone());
+        let value2 = self.elim_env().fun_app(value.clone(), var.clone());
 
         self.local_env.push();
         let result = self.unify(&value1, &value2);
@@ -346,10 +338,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         let expr = self.rename(meta_var, value)?;
         let fun_expr = self.fun_intros(spine, expr);
         let mut local_values = UniqueEnv::default();
-        let solution = self
-            .elim_env()
-            .eval_env(&mut local_values)
-            .eval(self.scope, &fun_expr);
+        let solution = self.elim_env().eval_env(&mut local_values).eval(&fun_expr);
         self.meta_values.set_level(meta_var, Some(solution));
         Ok(())
     }
@@ -362,7 +351,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
 
         for elim in spine {
             match elim {
-                Elim::FunApp(arg) => match self.elim_env().update_metas(self.scope, arg) {
+                Elim::FunApp(arg) => match self.elim_env().update_metas(arg) {
                     Value::Stuck(Head::Local(source_var), spine)
                         if spine.is_empty() && self.renaming.set_local(source_var) => {}
                     Value::Stuck(Head::Local(source_var), _) => {
@@ -396,7 +385,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         meta_var: Level,
         value: &Value<'arena>,
     ) -> Result<Expr<'arena>, RenameError> {
-        let value = self.elim_env().update_metas(self.scope, value);
+        let value = self.elim_env().update_metas(value);
         match value {
             Value::Lit(lit) => Ok(Expr::Lit(lit)),
             Value::Stuck(head, spine) => {
@@ -439,9 +428,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         closure: &Closure<'arena>,
     ) -> Result<Expr<'arena>, RenameError> {
         let source_var = self.renaming.next_local_var();
-        let value = self
-            .elim_env()
-            .apply_closure(self.scope, closure.clone(), source_var);
+        let value = self.elim_env().apply_closure(closure.clone(), source_var);
 
         self.renaming.push_local();
         let expr = self.rename(meta_var, &value);

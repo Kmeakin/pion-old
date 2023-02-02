@@ -31,10 +31,12 @@ impl<'arena> ElabCtx<'arena> {
         }
     }
 
-    pub fn elim_env(&self) -> ElimEnv<'arena, '_> { ElimEnv::new(&self.meta_env.values) }
+    pub fn elim_env(&self) -> ElimEnv<'arena, '_> {
+        ElimEnv::new(self.scope, &self.meta_env.values)
+    }
 
     pub fn eval_env(&mut self) -> EvalEnv<'arena, '_> {
-        let elim_env = ElimEnv::new(&self.meta_env.values);
+        let elim_env = ElimEnv::new(self.scope, &self.meta_env.values);
         elim_env.eval_env(&mut self.local_env.values)
     }
 

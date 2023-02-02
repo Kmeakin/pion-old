@@ -11,9 +11,8 @@ impl<'arena> ElabCtx<'arena> {
         match ann {
             None => self.synth_pat(pat),
             Some(ann) => {
-                let scope = self.scope;
                 let ann_expr = self.check(ann, &Value::TYPE);
-                let ann_value = self.eval_env().eval(scope, &ann_expr);
+                let ann_value = self.eval_env().eval(&ann_expr);
                 (self.check_pat(pat, &ann_value), ann_value)
             }
         }
@@ -28,9 +27,8 @@ impl<'arena> ElabCtx<'arena> {
         match ann {
             None => self.check_pat(pat, expected),
             Some(ann) => {
-                let scope = self.scope;
                 let ann_expr = self.check(ann, &Value::TYPE);
-                let ann_value = self.eval_env().eval(scope, &ann_expr);
+                let ann_value = self.eval_env().eval(&ann_expr);
                 match self.unifiy_ctx().unify(&ann_value, expected) {
                     Ok(()) => self.check_pat(pat, &ann_value),
                     Err(error) => {

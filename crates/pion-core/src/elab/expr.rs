@@ -34,12 +34,11 @@ impl<'arena> ElabCtx<'arena> {
             }
             surface::Expr::Let(_, (pat, ann, rhs, body)) => {
                 let (pat, pat_type) = self.synth_ann_pat(pat, ann);
-                let ann_expr = self.quote_env().quote(self.scope, &pat_type);
+                let ann_expr = self.quote_env().quote(&pat_type);
                 let pat_name = pat.name();
 
                 let rhs_expr = self.check(rhs, &pat_type);
-                let scope = self.scope;
-                let rhs_value = self.eval_env().eval(scope, &rhs_expr);
+                let rhs_value = self.eval_env().eval(&rhs_expr);
 
                 self.local_env.push_def(pat_name, pat_type, rhs_value);
                 let (body_expr, body_type) = self.synth(body);
@@ -52,15 +51,14 @@ impl<'arena> ElabCtx<'arena> {
                 (let_expr, body_type)
             }
             surface::Expr::Arrow(_, (domain, codomain)) => {
-                let scope = self.scope;
                 let domain = self.check(domain, &Type::TYPE);
-                let domain_value = self.eval_env().eval(scope, &domain);
+                let domain_value = self.eval_env().eval(&domain);
 
                 self.local_env.push_param(None, domain_value);
                 let codomain = self.check(codomain, &Type::TYPE);
                 self.local_env.pop();
 
-                let expr = Expr::FunLit(None, scope.to_scope((domain, codomain)));
+                let expr = Expr::FunLit(None, self.scope.to_scope((domain, codomain)));
                 (expr, Type::TYPE)
             }
             surface::Expr::FunType(_, params, body) => {
@@ -72,19 +70,18 @@ impl<'arena> ElabCtx<'arena> {
                 self.synth_fun_lit(params, body)
             }
             surface::Expr::FunApp(_, fun, args) => {
-                let scope = self.scope;
                 let (mut expr, mut r#type) = self.synth(fun);
                 let mut fun_range = fun.range();
                 for arg in args.iter() {
-                    r#type = self.elim_env().update_metas(self.scope, &r#type);
+                    r#type = self.elim_env().update_metas(&r#type);
                     match r#type {
                         Value::FunType(_, domain, codomain) => {
                             let arg_expr = self.check(arg, domain);
-                            let arg_value = self.eval_env().eval(scope, &arg_expr);
+                            let arg_value = self.eval_env().eval(&arg_expr);
 
                             fun_range = ByteRange::merge(fun_range, arg.range());
-                            expr = Expr::FunApp(scope.to_scope((expr, arg_expr)));
-                            r#type = self.elim_env().apply_closure(scope, codomain, arg_value);
+                            expr = Expr::FunApp(self.scope.to_scope((expr, arg_expr)));
+                            r#type = self.elim_env().apply_closure(codomain, arg_value);
                         }
                         _ if expr.is_error() || r#type.is_error() => {
                             return self.synth_error_expr()
@@ -117,7 +114,7 @@ impl<'arena> ElabCtx<'arena> {
             }
             Some((param, params)) => {
                 let (pat, param_type) = self.synth_ann_pat(&param.pat, &param.r#type);
-                let param_type_expr = self.quote_env().quote(self.scope, &param_type);
+                let param_type_expr = self.quote_env().quote(&param_type);
                 let name = pat.name();
 
                 self.local_env.push_param(name, param_type);
@@ -140,12 +137,12 @@ impl<'arena> ElabCtx<'arena> {
             None => self.synth(body),
             Some((param, params)) => {
                 let (pat, param_type) = self.synth_ann_pat(&param.pat, &param.r#type);
-                let param_type_expr = self.quote_env().quote(self.scope, &param_type);
+                let param_type_expr = self.quote_env().quote(&param_type);
                 let name = pat.name();
 
                 self.local_env.push_param(name, param_type.clone());
                 let (body_expr, body_type) = self.synth_fun_lit(params, body);
-                let body_type_expr = self.quote_env().quote(self.scope, &body_type);
+                let body_type_expr = self.quote_env().quote(&body_type);
                 self.local_env.pop();
 
                 let expr = Expr::FunLit(name, self.scope.to_scope((param_type_expr, body_expr)));
@@ -172,16 +169,16 @@ impl<'arena> ElabCtx<'arena> {
         match params.split_first() {
             None => self.check(body, expected),
             Some((param, params)) => {
-                let expected = self.elim_env().update_metas(self.scope, expected);
+                let expected = self.elim_env().update_metas(expected);
                 match expected {
                     Value::FunType(_, domain, codomain) => {
                         let pat = self.check_ann_pat(&param.pat, &param.r#type, domain);
-                        let param_type_expr = self.quote_env().quote(self.scope, domain);
+                        let param_type_expr = self.quote_env().quote(domain);
                         let name = pat.name();
 
                         let arg = self.local_env.next_var();
                         self.local_env.push_param(name, domain.clone());
-                        let body_type = self.elim_env().apply_closure(self.scope, codomain, arg);
+                        let body_type = self.elim_env().apply_closure(codomain, arg);
                         let body_expr = self.check_fun_lit(range, params, body, &body_type);
                         self.local_env.pop();
 
@@ -198,18 +195,17 @@ impl<'arena> ElabCtx<'arena> {
     }
 
     pub fn check(&mut self, expr: &surface::Expr, expected: &Type<'arena>) -> Expr<'arena> {
-        let expected = self.elim_env().update_metas(self.scope, expected);
+        let expected = self.elim_env().update_metas(expected);
         match (expr, &expected) {
             (surface::Expr::Error(_), _) => Expr::Error,
             (surface::Expr::Paren(..), _) => self.check(expr, &expected),
             (surface::Expr::Let(_, (pat, ann, rhs, body)), _) => {
                 let (pat, pat_type) = self.synth_ann_pat(pat, ann);
-                let ann_expr = self.quote_env().quote(self.scope, &pat_type);
+                let ann_expr = self.quote_env().quote(&pat_type);
                 let pat_name = pat.name();
 
                 let rhs_expr = self.check(rhs, &pat_type);
-                let scope = self.scope;
-                let rhs_value = self.eval_env().eval(scope, &rhs_expr);
+                let rhs_value = self.eval_env().eval(&rhs_expr);
 
                 self.local_env.push_def(pat_name, pat_type, rhs_value);
                 let body_expr = self.check(body, &expected);
