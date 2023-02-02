@@ -30,6 +30,8 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
     pub fn eval(&mut self, scope: &'arena Scope<'arena>, expr: &Expr<'arena>) -> Value<'arena> {
         match expr {
             Expr::Error => Value::ERROR,
+            Expr::Lit(lit) => Value::Lit(*lit),
+            Expr::Prim(prim) => Value::prim(*prim),
             Expr::Local(var) => self.get_local(*var).clone(),
             Expr::Meta(var) => match self.elim_env.get_meta(*var) {
                 Some(value) => value.clone(),
@@ -39,8 +41,6 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 let head = self.eval(scope, &Expr::Meta(*var));
                 self.apply_binder_infos(scope, head, infos)
             }
-            Expr::Lit(lit) => Value::Lit(*lit),
-            Expr::Prim(prim) => Value::prim(*prim),
             Expr::Let(_, (_, rhs, body)) => {
                 let rhs_value = self.eval(scope, rhs);
                 self.local_values.push(rhs_value);

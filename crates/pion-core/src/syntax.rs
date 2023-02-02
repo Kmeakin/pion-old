@@ -5,11 +5,11 @@ use crate::env::{Index, Level, UniqueEnv};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Expr<'arena> {
     Error,
+    Lit(Lit),
+    Prim(Prim),
     Local(Index),
     Meta(Level),
     InsertedMeta(Level, &'arena [BinderInfo]),
-    Lit(Lit),
-    Prim(Prim),
     Let(Option<Symbol>, &'arena (Self, Self, Self)),
     FunType(Option<Symbol>, &'arena (Self, Self)),
     FunLit(Option<Symbol>, &'arena (Self, Self)),
