@@ -26,6 +26,10 @@ impl<'arena> ElabCtx<'arena> {
                     return (Expr::Local(index), r#type.clone());
                 }
 
+                if let Some((prim, r#type)) = self.prim_env.lookup(*name) {
+                    return (Expr::Prim(prim), r#type.clone());
+                }
+
                 self.errors.push(Error::UnboundName {
                     range: *range,
                     name: *name,

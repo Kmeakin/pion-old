@@ -8,3 +8,4 @@ scoped-arena = "0.4.1"
 
 pion-source = { version = "0.1.0", path = "../pion-source" }
 pion-surface = { version = "0.1.0", path = "../pion-surface" }
+ustr = "0.9.0"

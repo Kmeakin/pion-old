@@ -2,6 +2,7 @@ use pion_surface::syntax::{self as surface, Symbol};
 use scoped_arena::Scope;
 
 use crate::env::{EnvLen, Level, UniqueEnv};
+use crate::prim::Prim;
 use crate::syntax::*;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

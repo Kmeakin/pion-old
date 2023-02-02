@@ -1,6 +1,7 @@
 use pion_surface::syntax::Symbol;
 
 use crate::env::{Index, Level, UniqueEnv};
+use crate::prim::Prim;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Expr<'arena> {
@@ -40,8 +41,8 @@ impl<'arena> Value<'arena> {
     pub const ERROR: Self = Self::Stuck(Head::Error, Vec::new());
 
     pub const TYPE: Self = Self::prim(Prim::Type);
-    pub const BOOL: Self = Self::prim(Prim::BoolType);
-    pub const INT: Self = Self::prim(Prim::IntType);
+    pub const BOOL: Self = Self::prim(Prim::Bool);
+    pub const INT: Self = Self::prim(Prim::Int);
 
     pub const fn prim(prim: Prim) -> Self { Self::Stuck(Head::Prim(prim), Vec::new()) }
 
@@ -99,23 +100,6 @@ pub enum Lit {
     Int(u32),
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Prim {
-    Type,
-    BoolType,
-    IntType,
-}
-
-impl Prim {
-    pub fn name(self) -> &'static str {
-        match self {
-            Prim::Type => "Type",
-            Prim::BoolType => "Bool",
-            Prim::IntType => "Int",
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::mem::size_of;
@@ -135,10 +119,5 @@ mod tests {
     #[test]
     fn lit_size() {
         assert_eq!(size_of::<Lit>(), 8);
-    }
-
-    #[test]
-    fn prim_size() {
-        assert_eq!(size_of::<Prim>(), 1);
     }
 }
