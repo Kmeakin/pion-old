@@ -28,7 +28,7 @@ pub struct Def<'arena, Extra = ByteRange> {
 pub enum Expr<'arena, Extra = ByteRange> {
     Error(Extra),
     Paren(Extra, &'arena Self),
-    Lit(Extra, Lit),
+    Lit(Extra, Lit<Extra>),
     Ident(Extra, Symbol),
     Let(
         Extra,

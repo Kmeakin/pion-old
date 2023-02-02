@@ -106,6 +106,16 @@ pub enum Prim {
     IntType,
 }
 
+impl Prim {
+    pub fn name(self) -> &'static str {
+        match self {
+            Prim::Type => "Type",
+            Prim::BoolType => "Bool",
+            Prim::IntType => "Int",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::mem::size_of;
