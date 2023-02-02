@@ -156,6 +156,11 @@ pub fn parse_hexadecimal_integer(input: &str) -> Result<u32, lexical::Error> {
     lexical::parse_with_options::<_, _, FORMAT>(input, &lexical::ParseIntegerOptions::new())
 }
 
+pub fn print_decimal_integer(input: u32) -> String {
+    const FORMAT: u128 = lexical::NumberFormatBuilder::new().build();
+    lexical::to_string_with_options::<_, FORMAT>(input, &lexical::WriteIntegerOptions::new())
+}
+
 pub type LalrpopParseError<'src> = lalrpop_util::ParseError<BytePos, Token<'src>, tokens::Error>;
 pub type LalrpopErrorRecovery<'src> =
     lalrpop_util::ErrorRecovery<BytePos, Token<'src>, tokens::Error>;
