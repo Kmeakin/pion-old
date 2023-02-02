@@ -11,6 +11,7 @@ use scoped_arena::Scope;
 enum Opts {
     Parse { file: PathBuf },
     Elab { file: PathBuf },
+    Eval { file: PathBuf },
 }
 
 fn read_file(file: &Path) -> InputString {
@@ -72,6 +73,34 @@ fn main() {
             let r#type = pretty_ctx.expr(&r#type).into_doc();
 
             println!("{} : {}", expr.pretty(80), r#type.pretty(80))
+        }
+        Opts::Eval { file } => {
+            let input = read_file(&file);
+            let scope = Scope::new();
+            let mut errors = Vec::new();
+            let expr = pion_surface::syntax::Expr::parse(&scope, &mut errors, input);
+            for error in errors {
+                eprintln!("error: {error:?}");
+            }
+
+            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope);
+            let (expr, _) = elab_ctx.synth(&expr);
+            for error in &elab_ctx.errors {
+                eprintln!("error: {error:?}");
+            }
+
+            let value = elab_ctx.eval_env().eval(&expr);
+            let expr = elab_ctx.quote_env().quote(&value);
+
+            let mut distill_ctx = elab_ctx.distill_ctx();
+
+            let expr = distill_ctx.expr(&expr);
+
+            let pretty_ctx = pion_surface::pretty::PrettyCtx::new(&scope);
+
+            let expr = pretty_ctx.expr(&expr).into_doc();
+
+            println!("{}", expr.pretty(80))
         }
     }
 }

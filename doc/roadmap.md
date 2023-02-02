@@ -3,9 +3,9 @@
 - [ ] Command line interface
     - [x] `pion parse`
     - [x] `pion elab`
-    - [ ] `pion eval`
-    - [ ] `pion compile`
+    - [x] `pion eval`
     - [ ] `pion format`
+    - [ ] `pion compile`
 - [x] Dependent lambda calculus (lambda, pi, app)
 - [x] Unification
 - [x] Distillation (core to surface)
