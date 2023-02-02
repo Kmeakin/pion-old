@@ -3,6 +3,7 @@ use pion_surface::syntax::{self as surface, Symbol};
 use scoped_arena::Scope;
 
 use self::unify::{PartialRenaming, UnifyCtx};
+use crate::distill::DistillCtx;
 use crate::env::{EnvLen, Index, Level, UniqueEnv};
 use crate::semantics::{ElimEnv, EvalEnv, QuoteEnv};
 use crate::syntax::*;
@@ -29,6 +30,10 @@ impl<'arena> ElabCtx<'arena> {
             renaming: PartialRenaming::default(),
             errors: Vec::new(),
         }
+    }
+
+    pub fn distill_ctx(&mut self) -> DistillCtx<'arena, '_> {
+        DistillCtx::new(self.scope, &mut self.local_env.names)
     }
 
     pub fn elim_env(&self) -> ElimEnv<'arena, '_> {

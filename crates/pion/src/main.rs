@@ -41,7 +41,9 @@ fn main() {
             for error in errors {
                 eprintln!("error: {error:?}");
             }
-            println!("{expr:?}")
+            let pretty_ctx = pion_surface::pretty::PrettyCtx::new(&scope);
+            let doc = pretty_ctx.expr(&expr).into_doc();
+            println!("{}", doc.pretty(80))
         }
         Opts::Elab { file } => {
             let input = read_file(&file);
@@ -54,14 +56,22 @@ fn main() {
 
             let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope);
             let (expr, r#type) = elab_ctx.synth(&expr);
-            for error in elab_ctx.errors {
+            let r#type = elab_ctx.quote_env().quote(&r#type);
+            for error in &elab_ctx.errors {
                 eprintln!("error: {error:?}");
             }
-            #[allow(clippy::uninlined_format_args)]
-            {
-                println!("expr: {:?}", expr);
-                println!("type: {:?}", r#type);
-            }
+
+            let mut distill_ctx = elab_ctx.distill_ctx();
+
+            let expr = distill_ctx.expr(&expr);
+            let r#type = distill_ctx.expr(&r#type);
+
+            let pretty_ctx = pion_surface::pretty::PrettyCtx::new(&scope);
+
+            let expr = pretty_ctx.expr(&expr).into_doc();
+            let r#type = pretty_ctx.expr(&r#type).into_doc();
+
+            println!("{} : {}", expr.pretty(80), r#type.pretty(80))
         }
     }
 }
