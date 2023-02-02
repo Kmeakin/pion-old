@@ -1,3 +1,5 @@
+use std::fmt;
+
 type RawIdx = u32;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
@@ -39,6 +41,10 @@ impl Index {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct Level(RawIdx);
+
+impl fmt::Display for Level {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0.fmt(f) }
+}
 
 impl Level {
     pub fn iter() -> impl Iterator<Item = Self> { (0..).map(Self) }
