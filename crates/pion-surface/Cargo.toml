@@ -11,6 +11,7 @@ lexical = { version = "6.1.1", features = ["power-of-two", "format"] }
 logos = "0.12.1"
 scoped-arena = "0.4.1"
 ustr = "0.9.0"
+pretty = "0.11.3"
 
 [build-dependencies]
 lalrpop = { git = "https://github.com/kmeakin/lalrpop", branch = "raw-identifiers" }
