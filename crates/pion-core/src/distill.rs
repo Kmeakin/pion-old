@@ -132,7 +132,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let mut params = Vec::new();
 
                 let initial_len = self.local_len();
-                while let Expr::FunLit(name, (r#type, next_body)) = body {
+                while let Expr::FunType(name, (r#type, next_body)) = body {
                     params.push(self.param(*name, r#type));
                     body = next_body;
                 }
