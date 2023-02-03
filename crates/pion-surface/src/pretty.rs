@@ -17,6 +17,8 @@ impl<'arena> PrettyCtx<'arena> {
             Expr::Error(_) => self.text("#error"),
             Expr::Paren(_, expr) => self.expr(expr).parens(),
             Expr::Lit(_, lit) => self.lit(lit),
+            Expr::Placeholder(_) => self.text("_"),
+            Expr::Hole(_, name) => self.text("?").append(name.as_str()),
             Expr::Ident(_, name) => self.text(name.as_str()),
             Expr::Let(_, (def, body)) => self
                 .text("let ")

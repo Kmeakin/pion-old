@@ -21,6 +21,24 @@ impl<'arena> ElabCtx<'arena> {
                 let (lit, r#type) = self.synth_lit(lit);
                 (Expr::Lit(lit), r#type)
             }
+            surface::Expr::Placeholder(range) => {
+                let type_source = MetaSource::PlaceholderType(*range);
+                let expr_source = MetaSource::PlaceholderExpr(*range);
+
+                let r#type = self.push_unsolved_type(type_source);
+                let expr = self.push_unsolved_expr(expr_source, r#type.clone());
+
+                (expr, r#type)
+            }
+            surface::Expr::Hole(range, name) => {
+                let type_source = MetaSource::HoleType(*range, *name);
+                let expr_source = MetaSource::HoleExpr(*range, *name);
+
+                let r#type = self.push_unsolved_type(type_source);
+                let expr = self.push_unsolved_expr(expr_source, r#type.clone());
+
+                (expr, r#type)
+            }
             surface::Expr::Ident(range, name) => {
                 if let Some((index, r#type)) = self.local_env.lookup(*name) {
                     return (Expr::Local(index), r#type.clone());

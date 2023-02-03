@@ -10,7 +10,11 @@ pub enum Token<'src> {
     #[regex(r"//[^\n]*", logos::skip)]
     Error,
 
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")] Ident(&'src str),
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")]
+    Ident(&'src str),
+
+    #[regex(r"\?[a-zA-Z_][a-zA-Z0-9_-]*", |lex| &lex.slice()[1..])]
+    Hole(&'src str),
 
     #[regex(r"[0-9][0-9_]*")]                   DecInt(&'src str),
     #[regex(r"0(b|B)[0-9][0-9_]*")]             BinInt(&'src str),
@@ -37,6 +41,7 @@ impl<'src> Token<'src> {
         match self {
             Token::Error => "unknown token",
             Token::Ident(_) => "identifier",
+            Token::Hole(_) => "hole",
             Token::DecInt(_) => "decimal integer",
             Token::BinInt(_) => "binary integer",
             Token::HexInt(_) => "hexadecimal integer",

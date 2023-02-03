@@ -15,6 +15,7 @@ extern {
 
     enum Token<'source> {
         "Ident" => Token::Ident(<&'source str>),
+        "Hole" => Token::Hole(<&'source str>),
         "DecInt" => Token::DecInt(<&'source str>),
         "BinInt" => Token::BinInt(<&'source str>),
         "HexInt" => Token::HexInt(<&'source str>),
@@ -80,6 +81,8 @@ AppExpr: Expr<'arena> = {
 AtomExpr: Expr<'arena> = {
     <start: @L> "(" <expr: Expr> ")" <end: @R> => Expr::Paren(ByteRange::new(start, end), scope.to_scope(expr)),
     <start: @L> <lit: Lit> <end: @R> => Expr::Lit(ByteRange::new(start, end), lit),
+    <start: @L> "_" <end: @R> => Expr::Placeholder(ByteRange::new(start, end)),
+    <start: @L> <hole: Hole> <end: @R> => Expr::Hole(ByteRange::new(start, end), hole),
     <start: @L> <ident: Ident> <end: @R> => Expr::Ident(ByteRange::new(start, end), ident),
 }
 
@@ -131,6 +134,10 @@ Ann: Expr<'arena> = {
 
 Ident: Symbol = {
     <ident: "Ident"> => ident.into(),
+}
+
+Hole: Symbol = {
+    <hole: "Hole"> => hole.into(),
 }
 
 Seq<Elem, Sep>: &'arena [Elem] = {

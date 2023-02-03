@@ -36,7 +36,11 @@ impl<'arena> ElabCtx<'arena> {
     }
 
     pub fn distill_ctx(&mut self) -> DistillCtx<'arena, '_> {
-        DistillCtx::new(self.scope, &mut self.local_env.names)
+        DistillCtx::new(
+            self.scope,
+            &mut self.local_env.names,
+            &self.meta_env.sources,
+        )
     }
 
     pub fn elim_env(&self) -> ElimEnv<'arena, '_> {
@@ -196,7 +200,13 @@ impl<'arena> MetaEnv<'arena> {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum MetaSource {
+pub enum MetaSource {
+    PlaceholderType(ByteRange),
+    PlaceholderExpr(ByteRange),
+
+    HoleType(ByteRange, Symbol),
+    HoleExpr(ByteRange, Symbol),
+
     PatType(ByteRange),
 }
 

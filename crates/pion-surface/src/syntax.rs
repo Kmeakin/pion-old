@@ -29,6 +29,8 @@ pub enum Expr<'arena, Extra = ByteRange> {
     Error(Extra),
     Paren(Extra, &'arena Self),
     Lit(Extra, Lit<Extra>),
+    Placeholder(Extra),
+    Hole(Extra, Symbol),
     Ident(Extra, Symbol),
     Let(Extra, &'arena (LetDef<'arena, Extra>, Self)),
     Arrow(Extra, &'arena (Self, Self)),
@@ -53,6 +55,8 @@ impl<'arena, Extra> Expr<'arena, Extra> {
             Expr::Error(range, ..)
             | Expr::Paren(range, ..)
             | Expr::Lit(range, ..)
+            | Expr::Placeholder(range, ..)
+            | Expr::Hole(range, ..)
             | Expr::Ident(range, ..)
             | Expr::Let(range, ..)
             | Expr::Arrow(range, ..)

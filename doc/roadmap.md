@@ -11,7 +11,7 @@
 - [x] Distillation (core to surface)
 - [x] Pretty printer (surface)
 - [ ] Pretty printer (core)
-- [ ] Holes
+- [x] Holes
 - [ ] Implicit parameters
 - [ ] Compiler (core to LLVM)
 - [ ] Diagnostic reporting

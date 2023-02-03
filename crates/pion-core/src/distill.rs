@@ -1,6 +1,7 @@
 use pion_surface::syntax::{self as surface, Symbol};
 use scoped_arena::Scope;
 
+use crate::elab::MetaSource;
 use crate::env::{EnvLen, Level, UniqueEnv};
 use crate::prim::Prim;
 use crate::syntax::*;
@@ -18,14 +19,20 @@ enum Prec {
 pub struct DistillCtx<'arena, 'env> {
     scope: &'arena Scope<'arena>,
     local_names: &'env mut UniqueEnv<Option<Symbol>>,
+    meta_sources: &'env UniqueEnv<MetaSource>,
 }
 
 impl<'arena, 'env> DistillCtx<'arena, 'env> {
     pub fn new(
         scope: &'arena Scope<'arena>,
         local_names: &'env mut UniqueEnv<Option<Symbol>>,
+        meta_sources: &'env UniqueEnv<MetaSource>,
     ) -> Self {
-        Self { scope, local_names }
+        Self {
+            scope,
+            local_names,
+            meta_sources,
+        }
     }
 
     fn local_len(&mut self) -> EnvLen { self.local_names.len() }
@@ -95,7 +102,11 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 Some(None) => unreachable!("Referenced local variable without name"),
                 None => panic!("Unbound local variable: {var:?}"),
             },
-            Expr::Meta(var) => surface::Expr::Ident((), Symbol::from(&format!("?{var}"))),
+            Expr::Meta(var) => match self.meta_sources.get_level(*var) {
+                Some(MetaSource::HoleExpr(_, name)) => surface::Expr::Hole((), *name),
+                Some(_) => surface::Expr::Hole((), var.to_string().into()),
+                None => panic!("Unbound meta variable: {var:?}"),
+            },
             Expr::InsertedMeta(var, spine) => {
                 let head = self.expr(&Expr::Meta(*var));
                 let args = self.scope.to_scope_from_iter(
