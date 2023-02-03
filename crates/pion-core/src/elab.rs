@@ -72,8 +72,8 @@ impl<'arena> ElabCtx<'arena> {
     }
 
     fn push_unsolved_type(&mut self, source: MetaSource) -> Value<'arena> {
-        self.push_unsolved_expr(source, Value::TYPE);
-        Value::TYPE
+        let expr = self.push_unsolved_expr(source, Value::TYPE);
+        self.eval_env().eval(&expr)
     }
 }
 
