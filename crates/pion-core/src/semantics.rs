@@ -48,9 +48,9 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 let head = self.eval(&Expr::Meta(*var));
                 self.apply_binder_infos(head, infos)
             }
-            Expr::Let(_, (_, rhs, body)) => {
-                let rhs_value = self.eval(rhs);
-                self.local_values.push(rhs_value);
+            Expr::Let((def, body)) => {
+                let expr_value = self.eval(&def.expr);
+                self.local_values.push(expr_value);
                 let body_value = self.eval(body);
                 self.local_values.pop();
                 body_value

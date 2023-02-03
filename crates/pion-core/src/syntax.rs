@@ -11,10 +11,17 @@ pub enum Expr<'arena> {
     Local(Index),
     Meta(Level),
     InsertedMeta(Level, &'arena [BinderInfo]),
-    Let(Option<Symbol>, &'arena (Self, Self, Self)),
+    Let(&'arena (LetDef<'arena>, Self)),
     FunType(Option<Symbol>, &'arena (Self, Self)),
     FunLit(Option<Symbol>, &'arena (Self, Self)),
     FunApp(&'arena (Self, Self)),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct LetDef<'arena> {
+    pub name: Option<Symbol>,
+    pub r#type: Expr<'arena>,
+    pub expr: Expr<'arena>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

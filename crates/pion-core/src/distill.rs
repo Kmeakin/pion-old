@@ -57,6 +57,17 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
         param
     }
 
+    fn let_def(&mut self, def: &LetDef<'_>) -> surface::LetDef<'arena, ()> {
+        let name = def.name;
+        let def = surface::LetDef {
+            pat: self.name_to_pat(def.name),
+            r#type: Some(self.expr_prec(Prec::Top, &def.r#type)),
+            expr: (self.expr_prec(Prec::Let, &def.expr)),
+        };
+        self.push_local(name);
+        def
+    }
+
     fn name_to_pat(&self, name: Option<Symbol>) -> surface::Pat<'arena, ()> {
         match name {
             Some(name) => surface::Pat::Ident((), name),
@@ -106,19 +117,14 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
             }
             Expr::Lit(lit) => surface::Expr::Lit((), self.lit(lit)),
             Expr::Prim(prim) => self.prim(prim),
-            Expr::Let(name, (expr, r#type, body)) => {
-                let pat = self.name_to_pat(*name);
-
-                let r#type = self.expr_prec(Prec::Top, r#type);
-                let expr = self.expr_prec(Prec::Let, expr);
-
-                self.push_local(*name);
+            Expr::Let((def, body)) => {
+                let def = self.let_def(def);
                 let body = self.expr_prec(Prec::Let, body);
                 self.pop_local();
 
                 self.paren(
                     prec > Prec::Let,
-                    surface::Expr::Let((), self.scope.to_scope((pat, Some(r#type), expr, body))),
+                    surface::Expr::Let((), self.scope.to_scope((def, body))),
                 )
             }
             Expr::FunType(..) => {

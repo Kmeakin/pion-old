@@ -18,16 +18,16 @@ impl<'arena> PrettyCtx<'arena> {
             Expr::Paren(_, expr) => self.expr(expr).parens(),
             Expr::Lit(_, lit) => self.lit(lit),
             Expr::Ident(_, name) => self.text(name.as_str()),
-            Expr::Let(_, (pat, r#type, expr, body)) => self
+            Expr::Let(_, (def, body)) => self
                 .text("let ")
-                .append(self.pat(pat))
+                .append(self.pat(&def.pat))
                 .append(
-                    r#type
+                    def.r#type
                         .as_ref()
                         .map(|r#type| self.text(" : ").append(self.expr(r#type))),
                 )
                 .append(" = ")
-                .append(self.expr(expr))
+                .append(self.expr(&def.expr))
                 .append("; ")
                 .append(self.expr(body)),
             Expr::Arrow(_, (r#type, body)) => {

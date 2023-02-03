@@ -36,23 +36,11 @@ impl<'arena> ElabCtx<'arena> {
                 });
                 self.synth_error_expr()
             }
-            surface::Expr::Let(_, (pat, ann, rhs, body)) => {
-                let (pat, pat_type) = self.synth_ann_pat(pat, ann);
-                let ann_expr = self.quote_env().quote(&pat_type);
-                let pat_name = pat.name();
-
-                let rhs_expr = self.check(rhs, &pat_type);
-                let rhs_value = self.eval_env().eval(&rhs_expr);
-
-                self.local_env.push_def(pat_name, pat_type, rhs_value);
+            surface::Expr::Let(_, (def, body)) => {
+                let def = self.synth_let_def(def);
                 let (body_expr, body_type) = self.synth(body);
                 self.local_env.pop();
-
-                let let_expr = Expr::Let(
-                    pat_name,
-                    self.scope.to_scope((ann_expr, rhs_expr, body_expr)),
-                );
-                (let_expr, body_type)
+                (Expr::Let(self.scope.to_scope((def, body_expr))), body_type)
             }
             surface::Expr::Arrow(_, (domain, codomain)) => {
                 let domain = self.check(domain, &Type::TYPE);
@@ -105,6 +93,19 @@ impl<'arena> ElabCtx<'arena> {
     }
 
     fn synth_error_expr(&mut self) -> (Expr<'arena>, Type<'arena>) { (Expr::Error, Type::ERROR) }
+
+    fn synth_let_def(&mut self, def: &surface::LetDef) -> LetDef<'arena> {
+        let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
+        let name = pat.name();
+
+        let expr = self.check(&def.expr, &type_value);
+        let expr_value = self.eval_env().eval(&expr);
+
+        let r#type = self.quote_env().quote(&type_value);
+
+        self.local_env.push_def(name, type_value, expr_value);
+        LetDef { name, r#type, expr }
+    }
 
     fn synth_fun_type(
         &mut self,
@@ -203,22 +204,11 @@ impl<'arena> ElabCtx<'arena> {
         match (expr, &expected) {
             (surface::Expr::Error(_), _) => Expr::Error,
             (surface::Expr::Paren(..), _) => self.check(expr, &expected),
-            (surface::Expr::Let(_, (pat, ann, rhs, body)), _) => {
-                let (pat, pat_type) = self.synth_ann_pat(pat, ann);
-                let ann_expr = self.quote_env().quote(&pat_type);
-                let pat_name = pat.name();
-
-                let rhs_expr = self.check(rhs, &pat_type);
-                let rhs_value = self.eval_env().eval(&rhs_expr);
-
-                self.local_env.push_def(pat_name, pat_type, rhs_value);
-                let body_expr = self.check(body, &expected);
+            (surface::Expr::Let(_, (def, body)), _) => {
+                let def = self.synth_let_def(def);
+                let body = self.check(body, &expected);
                 self.local_env.pop();
-
-                Expr::Let(
-                    pat_name,
-                    self.scope.to_scope((ann_expr, rhs_expr, body_expr)),
-                )
+                Expr::Let(self.scope.to_scope((def, body)))
             }
             (surface::Expr::FunLit(range, params, body), _) => {
                 self.local_env.reserve(params.len());

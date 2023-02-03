@@ -53,12 +53,16 @@ pub Expr: Expr<'arena> = {
 }
 
 LetExpr: Expr<'arena> = {
-    <start: @L> "let" <pat: Pat> <r#type: Ann?> "=" <rhs: Expr> ";" <body: Expr> <end: @R> =>
+    <start: @L> "let" <def: LetDef> ";" <body: Expr> <end: @R> =>
         Expr::Let(
             ByteRange::new(start, end),
-            scope.to_scope((pat, r#type, rhs, body)),
+            scope.to_scope((def, body)),
         ),
     FunExpr => <>,
+}
+
+LetDef: LetDef<'arena> = {
+    <pat: Pat> <r#type: Ann?> "=" <expr: Expr> => LetDef {pat, r#type, expr},
 }
 
 FunExpr: Expr<'arena> = {

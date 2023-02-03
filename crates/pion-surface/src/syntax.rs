@@ -30,14 +30,18 @@ pub enum Expr<'arena, Extra = ByteRange> {
     Paren(Extra, &'arena Self),
     Lit(Extra, Lit<Extra>),
     Ident(Extra, Symbol),
-    Let(
-        Extra,
-        &'arena (Pat<'arena, Extra>, Option<Self>, Self, Self),
-    ),
+    Let(Extra, &'arena (LetDef<'arena, Extra>, Self)),
     Arrow(Extra, &'arena (Self, Self)),
     FunType(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunLit(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunApp(Extra, &'arena Self, &'arena [Self]),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct LetDef<'arena, Extra = ByteRange> {
+    pub pat: Pat<'arena, Extra>,
+    pub r#type: Option<Expr<'arena, Extra>>,
+    pub expr: Expr<'arena, Extra>,
 }
 
 impl<'arena, Extra> Expr<'arena, Extra> {
