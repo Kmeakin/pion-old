@@ -123,9 +123,7 @@ impl<T> SliceEnv<T> {
     }
 
     /// Set an element in the environment using a level
-    pub fn set_level(&mut self, level: Level, entry: T) {
-        self.entries[(level.0 as usize)] = entry;
-    }
+    pub fn set_level(&mut self, level: Level, entry: T) { self.entries[level.0 as usize] = entry; }
 
     /// Iterate over the elements in the environment.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = &T> { self.entries.iter() }
