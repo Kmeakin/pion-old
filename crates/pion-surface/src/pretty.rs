@@ -16,6 +16,7 @@ impl<'arena> PrettyCtx<'arena> {
         match expr {
             Expr::Error(_) => self.text("#error"),
             Expr::Paren(_, expr) => self.expr(expr).parens(),
+            Expr::Ann(_, (expr, r#type)) => self.expr(expr).append(" : ").append(self.expr(r#type)),
             Expr::Lit(_, lit) => self.lit(lit),
             Expr::Placeholder(_) => self.text("_"),
             Expr::Hole(_, name) => self.text("?").append(name.as_str()),
@@ -30,7 +31,8 @@ impl<'arena> PrettyCtx<'arena> {
                 )
                 .append(" = ")
                 .append(self.expr(&def.expr))
-                .append("; ")
+                .append(";")
+                .append(self.softline())
                 .append(self.expr(body)),
             Expr::Arrow(_, (r#type, body)) => {
                 self.expr(r#type).append(" -> ").append(self.expr(body))

@@ -28,6 +28,7 @@ pub struct Def<'arena, Extra = ByteRange> {
 pub enum Expr<'arena, Extra = ByteRange> {
     Error(Extra),
     Paren(Extra, &'arena Self),
+    Ann(Extra, &'arena (Self, Self)),
     Lit(Extra, Lit<Extra>),
     Placeholder(Extra),
     Hole(Extra, Symbol),
@@ -54,6 +55,7 @@ impl<'arena, Extra> Expr<'arena, Extra> {
         match self {
             Expr::Error(range, ..)
             | Expr::Paren(range, ..)
+            | Expr::Ann(range, ..)
             | Expr::Lit(range, ..)
             | Expr::Placeholder(range, ..)
             | Expr::Hole(range, ..)

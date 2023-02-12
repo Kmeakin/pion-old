@@ -25,7 +25,7 @@ fn main() {
     std::env::set_current_dir(workspace_dir).unwrap();
     let workspace_dir = workspace_dir.display().to_string();
 
-    let tests = WalkDir::new("source_tests")
+    let tests = WalkDir::new("tests")
         .into_iter()
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().is_file())

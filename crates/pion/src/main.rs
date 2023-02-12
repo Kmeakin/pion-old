@@ -66,13 +66,12 @@ fn main() {
 
             let expr = distill_ctx.expr(&expr);
             let r#type = distill_ctx.expr(&r#type);
+            let expr = pion_surface::syntax::Expr::Ann((), scope.to_scope((expr, r#type)));
 
             let pretty_ctx = pion_surface::pretty::PrettyCtx::new(&scope);
-
             let expr = pretty_ctx.expr(&expr).into_doc();
-            let r#type = pretty_ctx.expr(&r#type).into_doc();
 
-            println!("{} : {}", expr.pretty(80), r#type.pretty(80))
+            println!("{}", expr.pretty(80))
         }
         Opts::Eval { file } => {
             let input = read_file(&file);

@@ -36,7 +36,11 @@ impl EnvLen {
 pub struct Index(RawIdx);
 
 impl Index {
+    pub fn new() -> Index { Self(0) }
+
     pub fn iter() -> impl Iterator<Item = Self> { (0..).map(Self) }
+
+    pub fn next(self) -> Index { Self(self.0 + 1) }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]

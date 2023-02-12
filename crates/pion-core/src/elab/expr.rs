@@ -17,6 +17,12 @@ impl<'arena> ElabCtx<'arena> {
         match expr {
             surface::Expr::Error(_) => (Expr::Error, Type::ERROR),
             surface::Expr::Paren(_, expr) => self.synth(expr),
+            surface::Expr::Ann(_, (expr, r#type)) => {
+                let r#type = self.check(r#type, &Value::TYPE);
+                let type_value = self.eval_env().eval(&r#type);
+                let expr = self.check(expr, &type_value);
+                (expr, type_value)
+            }
             surface::Expr::Lit(_, lit) => {
                 let (lit, r#type) = self.synth_lit(lit);
                 (Expr::Lit(lit), r#type)
@@ -68,7 +74,7 @@ impl<'arena> ElabCtx<'arena> {
                 let codomain = self.check(codomain, &Type::TYPE);
                 self.local_env.pop();
 
-                let expr = Expr::FunLit(None, self.scope.to_scope((domain, codomain)));
+                let expr = Expr::FunType(None, self.scope.to_scope((domain, codomain)));
                 (expr, Type::TYPE)
             }
             surface::Expr::FunType(_, params, body) => {
@@ -191,7 +197,7 @@ impl<'arena> ElabCtx<'arena> {
     ) -> Expr<'arena> {
         match params.split_first() {
             None => self.check(body, expected),
-            Some((param, params)) => {
+            Some((param, next_params)) => {
                 let expected = self.elim_env().update_metas(expected);
                 match expected {
                     Value::FunType(_, domain, codomain) => {
@@ -202,7 +208,7 @@ impl<'arena> ElabCtx<'arena> {
                         let arg = self.local_env.next_var();
                         self.local_env.push_param(name, domain.clone());
                         let body_type = self.elim_env().apply_closure(codomain, arg);
-                        let body_expr = self.check_fun_lit(range, params, body, &body_type);
+                        let body_expr = self.check_fun_lit(range, next_params, body, &body_type);
                         self.local_env.pop();
 
                         Expr::FunLit(name, self.scope.to_scope((param_type_expr, body_expr)))
@@ -221,7 +227,7 @@ impl<'arena> ElabCtx<'arena> {
         let expected = self.elim_env().update_metas(expected);
         match (expr, &expected) {
             (surface::Expr::Error(_), _) => Expr::Error,
-            (surface::Expr::Paren(..), _) => self.check(expr, &expected),
+            (surface::Expr::Paren(_, expr), _) => self.check(expr, &expected),
             (surface::Expr::Let(_, (def, body)), _) => {
                 let def = self.synth_let_def(def);
                 let body = self.check(body, &expected);

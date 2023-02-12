@@ -50,11 +50,14 @@ pub Def: Def<'arena> = {
 
 
 pub Expr: Expr<'arena> = {
+    <start: @L> <expr: LetExpr> ":" <r#type: LetExpr> <end: @R> => {
+        Expr::Ann(ByteRange::new(start, end), scope.to_scope((expr, r#type)))
+    },
     LetExpr => <>,
 }
 
 LetExpr: Expr<'arena> = {
-    <start: @L> "let" <def: LetDef> ";" <body: Expr> <end: @R> =>
+    <start: @L> "let" <def: LetDef> ";" <body: LetExpr> <end: @R> =>
         Expr::Let(
             ByteRange::new(start, end),
             scope.to_scope((def, body)),
@@ -129,7 +132,7 @@ Int: u32 = {
 }
 
 Ann: Expr<'arena> = {
-    ":" <expr: Expr> => expr,
+    ":" <expr: LetExpr> => expr,
 }
 
 Ident: Symbol = {

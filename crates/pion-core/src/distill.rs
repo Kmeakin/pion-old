@@ -2,7 +2,7 @@ use pion_surface::syntax::{self as surface, Symbol};
 use scoped_arena::Scope;
 
 use crate::elab::MetaSource;
-use crate::env::{EnvLen, Level, UniqueEnv};
+use crate::env::{EnvLen, Index, Level, UniqueEnv};
 use crate::prim::Prim;
 use crate::syntax::*;
 
@@ -143,21 +143,42 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let mut params = Vec::new();
 
                 let initial_len = self.local_len();
-                while let Expr::FunType(name, (r#type, next_body)) = body {
-                    params.push(self.param(*name, r#type));
-                    body = next_body;
-                }
-                let body = self.expr_prec(Prec::Fun, body);
+                let body = loop {
+                    match body {
+                        // Use an explicit parameter if it is referenced in the body
+                        Expr::FunType(name, (r#type, next_body))
+                            if next_body.binds_local(Index::new()) =>
+                        {
+                            params.push(self.param(*name, r#type));
+                            body = next_body;
+                        }
+                        // Use arrow sugar if the parameter is not referenced in the body type.
+                        Expr::FunType(_, (r#type, body)) => {
+                            let param = self.expr_prec(Prec::App, r#type);
+
+                            self.push_local(None);
+                            let body = self.expr_prec(Prec::Fun, body);
+                            self.pop_local();
+
+                            break surface::Expr::Arrow((), self.scope.to_scope((param, body)));
+                        }
+                        _ => break self.expr_prec(Prec::Fun, body),
+                    }
+                };
                 self.truncate_local(initial_len);
 
-                self.paren(
-                    prec > Prec::Fun,
-                    surface::Expr::FunType(
-                        (),
-                        self.scope.to_scope_from_iter(params),
-                        self.scope.to_scope(body),
-                    ),
-                )
+                if params.is_empty() {
+                    self.paren(prec > Prec::Fun, body)
+                } else {
+                    self.paren(
+                        prec > Prec::Fun,
+                        surface::Expr::FunType(
+                            (),
+                            self.scope.to_scope_from_iter(params),
+                            self.scope.to_scope(body),
+                        ),
+                    )
+                }
             }
             Expr::FunLit(..) => {
                 let mut body = expr;
@@ -189,7 +210,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                     args.push(self.expr_prec(Prec::Atom, arg));
                 }
 
-                let fun = self.expr_prec(Prec::Atom, expr);
+                let fun = self.expr_prec(Prec::Atom, fun);
 
                 self.paren(
                     prec > Prec::App,

@@ -1,0 +1,5 @@
+exit status: 0
+stdout:
+fun (A : Type) (a : A) => a : fun (A : Type) -> A -> A
+
+stderr:

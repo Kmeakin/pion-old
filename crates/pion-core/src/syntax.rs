@@ -17,6 +17,26 @@ pub enum Expr<'arena> {
     FunApp(&'arena (Self, Self)),
 }
 
+impl<'arena> Expr<'arena> {
+    pub fn binds_local(&self, var: Index) -> bool {
+        match self {
+            Expr::Error | Expr::Lit(_) | Expr::Prim(_) | Expr::Meta(_) | Expr::InsertedMeta(..) => {
+                false
+            }
+            Expr::Local(v) => *v == var,
+            Expr::Let((def, body)) => {
+                def.r#type.binds_local(var)
+                    || def.expr.binds_local(var)
+                    || body.binds_local(var.next())
+            }
+            Expr::FunType(_, (param, body)) | Expr::FunLit(_, (param, body)) => {
+                param.binds_local(var) || body.binds_local(var.next())
+            }
+            Expr::FunApp((fun, arg)) => fun.binds_local(var) || arg.binds_local(var),
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct LetDef<'arena> {
     pub name: Option<Symbol>,
