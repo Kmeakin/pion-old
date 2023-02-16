@@ -12,6 +12,7 @@ logos = "0.12.1"
 scoped-arena = "0.4.1"
 ustr = "0.9.0"
 pretty = "0.11.3"
+codespan-reporting = "0.11.1"
 
 [build-dependencies]
 lalrpop = { git = "https://github.com/kmeakin/lalrpop", branch = "raw-identifiers" }

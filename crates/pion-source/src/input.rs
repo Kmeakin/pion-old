@@ -23,6 +23,10 @@ impl Deref for InputString {
     fn deref(&self) -> &Self::Target { &self.string }
 }
 
+impl AsRef<str> for InputString {
+    fn as_ref(&self) -> &str { &self.string }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct TooBigError {
     actual_len: usize,

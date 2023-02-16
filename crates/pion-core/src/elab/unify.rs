@@ -100,7 +100,7 @@ impl PartialRenaming {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Error {
+pub enum UnifyError {
     /// A known part of one value failed to match with a known part of the other
     /// value that we are comparing against.
     //
@@ -112,12 +112,12 @@ pub enum Error {
     Rename(RenameError),
 }
 
-impl From<SpineError> for Error {
-    fn from(error: SpineError) -> Error { Error::Spine(error) }
+impl From<SpineError> for UnifyError {
+    fn from(error: SpineError) -> UnifyError { UnifyError::Spine(error) }
 }
 
-impl From<RenameError> for Error {
-    fn from(error: RenameError) -> Error { Error::Rename(error) }
+impl From<RenameError> for UnifyError {
+    fn from(error: RenameError) -> UnifyError { UnifyError::Rename(error) }
 }
 
 /// An error that was found in the spine of a unification problem.
@@ -223,7 +223,11 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     fn elim_env(&self) -> ElimEnv<'arena, '_> { ElimEnv::new(self.scope, self.meta_values) }
 
     /// Unify two values, updating the solution environment if necessary.
-    pub fn unify(&mut self, value1: &Value<'arena>, value2: &Value<'arena>) -> Result<(), Error> {
+    pub fn unify(
+        &mut self,
+        value1: &Value<'arena>,
+        value2: &Value<'arena>,
+    ) -> Result<(), UnifyError> {
         if std::ptr::eq(value1, value2) {
             return Ok(());
         }
@@ -255,7 +259,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
             (Value::Stuck(Head::Meta(var), spine), other)
             | (other, Value::Stuck(Head::Meta(var), spine)) => self.solve(*var, spine, other),
 
-            _ => Err(Error::Mismatch),
+            _ => Err(UnifyError::Mismatch),
         }
     }
 
@@ -264,9 +268,9 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         &mut self,
         spine1: &[Elim<'arena>],
         spine2: &[Elim<'arena>],
-    ) -> Result<(), Error> {
+    ) -> Result<(), UnifyError> {
         if spine1.len() != spine2.len() {
-            return Err(Error::Mismatch);
+            return Err(UnifyError::Mismatch);
         }
 
         for (elim1, elim2) in Iterator::zip(spine1.iter(), spine2.iter()) {
@@ -282,7 +286,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         &mut self,
         closure1: &Closure<'arena>,
         closure2: &Closure<'arena>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), UnifyError> {
         let var = Value::local(self.local_env.next_level());
 
         let value1 = self.elim_env().apply_closure(closure1.clone(), var.clone());
@@ -304,7 +308,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         &mut self,
         body: &Closure<'arena>,
         value: &Value<'arena>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), UnifyError> {
         let var = Value::local(self.local_env.next_level());
         let value1 = self.elim_env().apply_closure(body.clone(), var.clone());
         let value2 = self.elim_env().fun_app(value.clone(), var.clone());
@@ -333,7 +337,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         meta_var: Level,
         spine: &[Elim<'arena>],
         value: &Value<'arena>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), UnifyError> {
         self.init_renaming(spine)?;
         let expr = self.rename(meta_var, value)?;
         let fun_expr = self.fun_intros(spine, expr);

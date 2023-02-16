@@ -3,8 +3,11 @@
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
+use driver::Driver;
 use pion_source::input::InputString;
 use scoped_arena::Scope;
+
+mod driver;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -14,92 +17,76 @@ enum Opts {
     Eval { file: PathBuf },
 }
 
-fn read_file(file: &Path) -> InputString {
+fn read_file(file: &Path) -> Result<InputString, String> {
     let input = match std::fs::read_to_string(file) {
         Ok(input) => input,
-        Err(err) => {
-            eprintln!("Cannot read `{}`: {err}", file.display());
-            std::process::exit(-1);
-        }
+        Err(err) => return Err(format!("Cannot read `{}`: {err}", file.display())),
     };
 
     match pion_source::input::InputString::new(input) {
-        Ok(input) => input,
-        Err(err) => {
-            eprintln!("{err}");
-            std::process::exit(-1);
+        Ok(input) => Ok(input),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+fn unwrap_or_exit<T, E: std::fmt::Display>(value: Result<T, E>) -> T {
+    match value {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1)
         }
     }
 }
 
 fn main() {
+    let scope = Scope::new();
+    let mut driver = Driver::new();
+
     match Opts::parse() {
         Opts::Parse { file } => {
-            let input = read_file(&file);
-            let scope = Scope::new();
-            let mut errors = Vec::new();
-            let expr = pion_surface::syntax::Expr::parse(&scope, &mut errors, input);
-            for error in errors {
-                eprintln!("error: {error:?}");
-            }
-            let pretty_ctx = pion_surface::pretty::PrettyCtx::new(&scope);
-            let doc = pretty_ctx.expr(&expr).into_doc();
-            println!("{}", doc.pretty(80))
+            let contents = unwrap_or_exit(read_file(&file));
+            let file_id = driver.add_file(&file, contents);
+            let expr = driver.parse_expr(&scope, file_id);
+            driver.emit_expr(&scope, &expr)
         }
         Opts::Elab { file } => {
-            let input = read_file(&file);
-            let scope = Scope::new();
-            let mut errors = Vec::new();
-            let expr = pion_surface::syntax::Expr::parse(&scope, &mut errors, input);
-            for error in errors {
-                eprintln!("error: {error:?}");
-            }
+            let contents = unwrap_or_exit(read_file(&file));
+            let file_id = driver.add_file(&file, contents);
+            let expr = driver.parse_expr(&scope, file_id);
 
             let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope);
             let (expr, r#type) = elab_ctx.synth(&expr);
-            let r#type = elab_ctx.quote_env().quote(&r#type);
-            for error in &elab_ctx.errors {
-                eprintln!("error: {error:?}");
+            for error in elab_ctx.errors.iter() {
+                driver.emit_diagnostic(error.to_diagnostic(file_id));
             }
+
+            let r#type = elab_ctx.quote_env().quote(&r#type);
 
             let mut distill_ctx = elab_ctx.distill_ctx();
-
             let expr = distill_ctx.expr(&expr);
             let r#type = distill_ctx.expr(&r#type);
-            let expr = pion_surface::syntax::Expr::Ann((), scope.to_scope((expr, r#type)));
 
-            let pretty_ctx = pion_surface::pretty::PrettyCtx::new(&scope);
-            let expr = pretty_ctx.expr(&expr).into_doc();
-
-            println!("{}", expr.pretty(80))
+            driver.emit_expr(
+                &scope,
+                &pion_surface::syntax::Expr::Ann((), scope.to_scope((expr, r#type))),
+            );
         }
         Opts::Eval { file } => {
-            let input = read_file(&file);
-            let scope = Scope::new();
-            let mut errors = Vec::new();
-            let expr = pion_surface::syntax::Expr::parse(&scope, &mut errors, input);
-            for error in errors {
-                eprintln!("error: {error:?}");
-            }
+            let contents = unwrap_or_exit(read_file(&file));
+            let file_id = driver.add_file(&file, contents);
+            let expr = driver.parse_expr(&scope, file_id);
 
             let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope);
             let (expr, _) = elab_ctx.synth(&expr);
-            for error in &elab_ctx.errors {
-                eprintln!("error: {error:?}");
+            for error in elab_ctx.errors.iter() {
+                driver.emit_diagnostic(error.to_diagnostic(file_id));
             }
 
-            let value = elab_ctx.eval_env().eval(&expr);
-            let expr = elab_ctx.quote_env().quote(&value);
-
-            let mut distill_ctx = elab_ctx.distill_ctx();
-
-            let expr = distill_ctx.expr(&expr);
-
-            let pretty_ctx = pion_surface::pretty::PrettyCtx::new(&scope);
-
-            let expr = pretty_ctx.expr(&expr).into_doc();
-
-            println!("{}", expr.pretty(80))
+            let expr_value = elab_ctx.eval_env().eval(&expr);
+            let expr = elab_ctx.quote_env().quote(&expr_value);
+            let expr = elab_ctx.distill_ctx().expr(&expr);
+            driver.emit_expr(&scope, &expr);
         }
-    }
+    };
 }

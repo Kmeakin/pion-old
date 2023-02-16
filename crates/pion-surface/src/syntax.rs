@@ -2,6 +2,7 @@ use pion_source::input::InputString;
 use pion_source::location::{BytePos, ByteRange};
 use scoped_arena::Scope;
 
+use crate::reporting::{SyntaxError, TokenError};
 use crate::tokens::{self, Token};
 
 pub type Symbol = ustr::Ustr;
@@ -72,14 +73,14 @@ impl<'arena, Extra> Expr<'arena, Extra> {
 impl<'arena> Expr<'arena, ByteRange> {
     pub fn parse(
         scope: &'arena Scope<'arena>,
-        errors: &mut Vec<Error>,
-        input: InputString,
+        errors: &mut Vec<SyntaxError>,
+        input: &InputString,
     ) -> Self {
-        let tokens = tokens::tokens(&input);
+        let tokens = tokens::tokens(input);
         match crate::grammar::ExprParser::new().parse(scope, errors, tokens) {
             Ok(expr) => expr,
             Err(err) => {
-                let err = Error::from_lalrpop(err);
+                let err = SyntaxError::from_lalrpop(err);
                 let range = err.range();
                 errors.push(err);
                 Expr::Error(range)
@@ -171,31 +172,10 @@ pub fn print_decimal_integer(input: u32) -> String {
     lexical::to_string_with_options::<_, FORMAT>(input, &lexical::WriteIntegerOptions::new())
 }
 
-pub type LalrpopParseError<'src> = lalrpop_util::ParseError<BytePos, Token<'src>, tokens::Error>;
-pub type LalrpopErrorRecovery<'src> =
-    lalrpop_util::ErrorRecovery<BytePos, Token<'src>, tokens::Error>;
+pub type LalrpopParseError<'src> = lalrpop_util::ParseError<BytePos, Token<'src>, TokenError>;
+pub type LalrpopErrorRecovery<'src> = lalrpop_util::ErrorRecovery<BytePos, Token<'src>, TokenError>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    Lexer(tokens::Error),
-    IntLit(ByteRange, lexical::Error),
-    InvalidToken(ByteRange),
-    UnrecognizedEOF {
-        range: ByteRange,
-        expected_tokens: Box<[&'static str]>,
-    },
-    UnrecognizedToken {
-        range: ByteRange,
-        found_token: &'static str,
-        expected_tokens: Box<[&'static str]>,
-    },
-    ExtraToken {
-        range: ByteRange,
-        found_token: &'static str,
-    },
-}
-
-impl Error {
+impl SyntaxError {
     pub const fn range(&self) -> ByteRange {
         match self {
             Self::Lexer(err) => err.range(),
@@ -214,27 +194,19 @@ impl Error {
             }
             LalrpopParseError::UnrecognizedEOF { location, expected } => {
                 let range = ByteRange::new(location, location);
-                let expected_tokens = expected
-                    .into_iter()
-                    .map(|name| Token::from_name(&name).description())
-                    .collect();
                 Self::UnrecognizedEOF {
                     range,
-                    expected_tokens,
+                    expected_tokens: expected.into_boxed_slice(),
                 }
             }
             LalrpopParseError::UnrecognizedToken { token, expected } => {
                 let (start, token, end) = token;
                 let range = ByteRange::new(start, end);
                 let found_token = token.description();
-                let expected_tokens = expected
-                    .into_iter()
-                    .map(|name| Token::from_name(&name).description())
-                    .collect();
                 Self::UnrecognizedToken {
                     range,
                     found_token,
-                    expected_tokens,
+                    expected_tokens: expected.into_boxed_slice(),
                 }
             }
             LalrpopParseError::ExtraToken { token } => {

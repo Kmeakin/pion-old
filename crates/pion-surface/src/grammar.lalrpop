@@ -3,15 +3,16 @@ use scoped_arena::Scope;
 use pion_source::location::{BytePos, ByteRange};
 use crate::tokens::Token;
 use crate::syntax::*;
+use crate::reporting::{TokenError, SyntaxError};
 
 grammar<'arena, 'source>(
     scope: &'arena Scope<'arena>,
-    errors: &mut Vec<Error>,
+    errors: &mut Vec<SyntaxError>,
 );
 
 extern {
     type Location = BytePos;
-    type Error = crate::tokens::Error;
+    type Error = TokenError;
 
     enum Token<'source> {
         "Ident" => Token::Ident(<&'source str>),
@@ -111,21 +112,21 @@ Int: u32 = {
     <start: @L> <str: "DecInt"> <end: @R> => match parse_decimal_integer(str) {
         Ok(int) => int,
         Err(err) => {
-            errors.push(Error::IntLit(ByteRange::new(start, end), err));
+            errors.push(SyntaxError::IntLit(ByteRange::new(start, end), err));
             0
         }
     },
     <start: @L> <str: "BinInt"> <end: @R> => match parse_binary_integer(str) {
         Ok(int) => int,
         Err(err) => {
-            errors.push(Error::IntLit(ByteRange::new(start, end), err));
+            errors.push(SyntaxError::IntLit(ByteRange::new(start, end), err));
             0
         }
     },
     <start: @L> <str: "HexInt"> <end: @R> => match parse_hexadecimal_integer(str) {
         Ok(int) => int,
         Err(err) => {
-            errors.push(Error::IntLit(ByteRange::new(start, end), err));
+            errors.push(SyntaxError::IntLit(ByteRange::new(start, end), err));
             0
         }
     },

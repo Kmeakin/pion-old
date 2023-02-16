@@ -54,7 +54,7 @@ impl<'arena> ElabCtx<'arena> {
                     return (Expr::Prim(prim), r#type.clone());
                 }
 
-                self.errors.push(Error::UnboundName {
+                self.errors.push(ElabError::UnboundName {
                     range: *range,
                     name: *name,
                 });
@@ -103,8 +103,10 @@ impl<'arena> ElabCtx<'arena> {
                             return self.synth_error_expr()
                         }
                         _ => {
-                            self.errors.push(Error::UnexpectedArgument {
+                            let fun_type = self.pretty_value(&r#type);
+                            self.errors.push(ElabError::UnexpectedArgument {
                                 fun_range,
+                                fun_type,
                                 arg_range: arg.range(),
                             });
                             return self.synth_error_expr();
@@ -256,7 +258,14 @@ impl<'arena> ElabCtx<'arena> {
         match self.unifiy_ctx().unify(from, to) {
             Ok(()) => expr,
             Err(error) => {
-                self.errors.push(Error::Unification { range, error });
+                let found = self.pretty_value(from);
+                let expected = self.pretty_value(to);
+                self.errors.push(ElabError::Unification {
+                    range,
+                    found,
+                    expected,
+                    error,
+                });
                 Expr::Error
             }
         }

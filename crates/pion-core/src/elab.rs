@@ -6,12 +6,13 @@ use self::unify::{PartialRenaming, UnifyCtx};
 use crate::distill::DistillCtx;
 use crate::env::{EnvLen, Index, Level, UniqueEnv};
 use crate::prim::PrimEnv;
+use crate::reporting::ElabError;
 use crate::semantics::{ElimEnv, EvalEnv, QuoteEnv};
 use crate::syntax::*;
 
 mod expr;
 mod pat;
-mod unify;
+pub mod unify;
 
 /// Elaboration context.
 pub struct ElabCtx<'arena> {
@@ -20,7 +21,7 @@ pub struct ElabCtx<'arena> {
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
-    pub errors: Vec<Error>,
+    pub errors: Vec<ElabError>,
 }
 
 impl<'arena> ElabCtx<'arena> {
@@ -78,6 +79,14 @@ impl<'arena> ElabCtx<'arena> {
     fn push_unsolved_type(&mut self, source: MetaSource) -> Value<'arena> {
         let expr = self.push_unsolved_expr(source, Value::TYPE);
         self.eval_env().eval(&expr)
+    }
+
+    fn pretty_value(&mut self, value: &Value) -> String {
+        let expr = self.quote_env().quote(value);
+        let surface_expr = self.distill_ctx().expr(&expr);
+        let ctx = pion_surface::pretty::PrettyCtx::new(self.scope);
+        let doc = ctx.expr(&surface_expr);
+        doc.pretty(usize::MAX).to_string()
     }
 }
 
@@ -208,20 +217,4 @@ pub enum MetaSource {
     HoleExpr(ByteRange, Symbol),
 
     PatType(ByteRange),
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Error {
-    UnboundName {
-        range: ByteRange,
-        name: Symbol,
-    },
-    UnexpectedArgument {
-        fun_range: ByteRange,
-        arg_range: ByteRange,
-    },
-    Unification {
-        range: ByteRange,
-        error: unify::Error,
-    },
 }

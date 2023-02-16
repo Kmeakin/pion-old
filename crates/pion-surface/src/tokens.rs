@@ -2,6 +2,8 @@ use logos::{Lexer, Logos};
 use pion_source::input::InputString;
 use pion_source::location::{BytePos, ByteRange};
 
+use crate::reporting::TokenError;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Logos)]
 #[rustfmt::skip]
 pub enum Token<'src> {
@@ -45,11 +47,11 @@ impl<'src> Token<'src> {
             Token::DecInt(_) => "decimal integer",
             Token::BinInt(_) => "binary integer",
             Token::HexInt(_) => "hexadecimal integer",
-            Token::KwDef => "keyword `def`",
-            Token::KwFalse => "keyword `false`",
-            Token::KwFun => "keyword `fun`",
-            Token::KwLet => "keyword `let`",
-            Token::KwTrue => "keyword `true`",
+            Token::KwDef => "`def`",
+            Token::KwFalse => "`false`",
+            Token::KwFun => "`fun`",
+            Token::KwLet => "`let`",
+            Token::KwTrue => "`true`",
             Token::Underscore => "`_`",
             Token::ThinArrow => "`->`",
             Token::Comma => "`,`",
@@ -61,53 +63,16 @@ impl<'src> Token<'src> {
             Token::FatArrow => "`=>`",
         }
     }
-
-    pub fn from_name(name: &str) -> Self {
-        match name {
-            r#""Ident""# => Self::Ident(""),
-            r#""DecInt""# => Self::DecInt(""),
-            r#""BinInt""# => Self::BinInt(""),
-            r#""HexInt""# => Self::HexInt(""),
-            r#""def""# => Self::KwDef,
-            r#""false""# => Self::KwFalse,
-            r#""fun""# => Self::KwFun,
-            r#""let""# => Self::KwLet,
-            r#""true""# => Self::KwTrue,
-            r#""_""# => Self::Underscore,
-            r#""->""# => Self::ThinArrow,
-            r#"",""# => Self::Comma,
-            r#"";""# => Self::Semicolon,
-            r#"":""# => Self::Colon,
-            r#""(""# => Self::LParen,
-            r#"")""# => Self::RParen,
-            r#""=""# => Self::Eq,
-            r#""=>""# => Self::FatArrow,
-            _ => Self::Error,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    Unknown(ByteRange),
-}
-
-impl Error {
-    pub const fn range(&self) -> ByteRange {
-        match self {
-            Self::Unknown(range, ..) => *range,
-        }
-    }
 }
 
 pub fn tokens(
     input: &InputString,
-) -> impl Iterator<Item = Result<(BytePos, Token, BytePos), Error>> {
+) -> impl Iterator<Item = Result<(BytePos, Token, BytePos), TokenError>> {
     Lexer::new(input.as_str()).spanned().map(|(token, range)| {
         let start = BytePos::truncate(range.start);
         let end = BytePos::truncate(range.end);
         match token {
-            Token::Error => Err(Error::Unknown(ByteRange::new(start, end))),
+            Token::Error => Err(TokenError::Unknown(ByteRange::new(start, end))),
             _ => Ok((start, token, end)),
         }
     })

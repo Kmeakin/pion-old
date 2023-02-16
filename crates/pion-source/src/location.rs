@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Range;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BytePos(u32);
@@ -16,6 +17,9 @@ impl BytePos {
 
 impl From<BytePos> for u32 {
     fn from(other: BytePos) -> Self { other.0 }
+}
+impl From<BytePos> for usize {
+    fn from(other: BytePos) -> Self { other.0 as usize }
 }
 impl From<u32> for BytePos {
     fn from(other: u32) -> Self { Self(other) }
@@ -36,6 +40,10 @@ impl ByteRange {
             std::cmp::max(this.end, other.end),
         )
     }
+}
+
+impl From<ByteRange> for Range<usize> {
+    fn from(range: ByteRange) -> Self { (range.start.into())..(range.end.into()) }
 }
 
 impl fmt::Debug for ByteRange {

@@ -32,9 +32,13 @@ impl<'arena> ElabCtx<'arena> {
                 match self.unifiy_ctx().unify(&ann_value, expected) {
                     Ok(()) => self.check_pat(pat, &ann_value),
                     Err(error) => {
-                        self.errors.push(Error::Unification {
+                        let found = self.pretty_value(&ann_value);
+                        let expected = self.pretty_value(expected);
+                        self.errors.push(ElabError::Unification {
                             range: ann.range(),
                             error,
+                            found,
+                            expected,
                         });
                         Pat::Error(&())
                     }
@@ -86,7 +90,14 @@ impl<'arena> ElabCtx<'arena> {
         match self.unifiy_ctx().unify(from, to) {
             Ok(()) => pat,
             Err(error) => {
-                self.errors.push(Error::Unification { range, error });
+                let found = self.pretty_value(from);
+                let expected = self.pretty_value(to);
+                self.errors.push(ElabError::Unification {
+                    range,
+                    found,
+                    expected,
+                    error,
+                });
                 Pat::Error(&())
             }
         }

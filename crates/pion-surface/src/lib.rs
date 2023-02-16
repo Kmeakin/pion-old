@@ -2,6 +2,7 @@
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod pretty;
+mod reporting;
 pub mod syntax;
 pub mod tokens;
 
