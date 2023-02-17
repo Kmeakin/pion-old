@@ -1,0 +1,3 @@
+//~ run = "${PION} elab ${FILE}"
+
+{x : Int}

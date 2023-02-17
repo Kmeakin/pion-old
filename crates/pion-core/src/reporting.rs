@@ -24,6 +24,24 @@ pub enum ElabError {
         actual_arity: usize,
         extra_args_range: ByteRange,
     },
+    RecordFieldDuplicate {
+        name: &'static str,
+        label: Symbol,
+        first_range: ByteRange,
+        duplicate_range: ByteRange,
+    },
+    RecordProjNotRecord {
+        head_range: ByteRange,
+        head_type: String,
+        label_range: ByteRange,
+        label: Symbol,
+    },
+    RecordProjNotFound {
+        head_range: ByteRange,
+        head_type: String,
+        label_range: ByteRange,
+        label: Symbol,
+    },
     UnsolvedMeta {
         source: MetaSource,
     },
@@ -86,6 +104,43 @@ impl ElabError {
                      arguments",
                     pluralize(*expected_arity, "argument", "arguments"),
                 )]),
+            Self::RecordFieldDuplicate {
+                name,
+                label,
+                first_range,
+                duplicate_range,
+            } => Diagnostic::error()
+                .with_message(format!("duplicate field `{label}` in {name}"))
+                .with_labels(vec![
+                    secondary_label(first_range).with_message("first occurence"),
+                    primary_label(duplicate_range).with_message("duplicate occurence"),
+                ]),
+            Self::RecordProjNotRecord {
+                head_range,
+                head_type,
+                label_range,
+                label,
+            } => Diagnostic::error()
+                .with_message(format!(
+                    "tried to access field `{label}` of non-record expression"
+                ))
+                .with_labels(vec![
+                    primary_label(head_range)
+                        .with_message(format!("expression of type `{head_type}`")),
+                    secondary_label(label_range).with_message("field access"),
+                ]),
+            Self::RecordProjNotFound {
+                head_range,
+                head_type,
+                label_range,
+                label,
+            } => Diagnostic::error()
+                .with_message(format!("no field named `{label}` in record"))
+                .with_labels(vec![
+                    primary_label(head_range)
+                        .with_message(format!("expression of type `{head_type}`")),
+                    secondary_label(label_range).with_message("unknown field"),
+                ]),
             Self::Unification {
                 range,
                 found,
@@ -105,6 +160,7 @@ impl ElabError {
                         SpineError::NonLocalFunApp => {
                             "non-variable function application in problem spine"
                         }
+                        SpineError::RecordProj(_) => "record projetion found in problem spine",
                     };
                     Diagnostic::error()
                         .with_message(message)

@@ -1,0 +1,13 @@
+//~ run = "${PION} elab ${FILE}"
+
+let _ = ();
+let _ = (1,);
+let _ = (1, 2);
+let _ = (1, 2, 3);
+
+let _ : Type = ();
+let _ : Type = (Int,);
+let _ : Type = (Int, Int);
+let _ : Type = (Int, Int, Int);
+
+{}

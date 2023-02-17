@@ -1,0 +1,5 @@
+//~ run = "${PION} elab ${FILE}"
+
+let _ : {A : Type, a : A} = {A = Bool, a = false};
+
+{}

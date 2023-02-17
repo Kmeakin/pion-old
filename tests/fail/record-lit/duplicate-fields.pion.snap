@@ -1,0 +1,21 @@
+exit status: 0
+stdout:
+{ x = Bool, y = Bool } : { x : Type, y : Type }
+
+stderr:
+error: duplicate field `x` in record literal
+  ┌─ tests/fail/record-lit/duplicate-fields.pion:3:22
+  │
+3 │ {x = Bool, y = Bool, x = Type, y = Type}
+  │  -                   ^ duplicate occurence
+  │  │                    
+  │  first occurence
+
+error: duplicate field `y` in record literal
+  ┌─ tests/fail/record-lit/duplicate-fields.pion:3:32
+  │
+3 │ {x = Bool, y = Bool, x = Type, y = Type}
+  │            -                   ^ duplicate occurence
+  │            │                    
+  │            first occurence
+

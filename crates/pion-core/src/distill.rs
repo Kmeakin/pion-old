@@ -1,4 +1,4 @@
-use pion_surface::syntax::{self as surface, Symbol};
+use pion_surface::syntax::{self as surface, ExprField, Symbol, TypeField};
 use scoped_arena::Scope;
 
 use crate::elab::MetaSource;
@@ -12,6 +12,7 @@ enum Prec {
     Let,
     Fun,
     App,
+    Proj,
     Atom,
 }
 
@@ -188,10 +189,10 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
 
                 while let Expr::FunApp((next_fun, arg)) = fun {
                     fun = next_fun;
-                    args.push(self.expr_prec(Prec::Atom, arg));
+                    args.push(self.expr_prec(Prec::Proj, arg));
                 }
 
-                let fun = self.expr_prec(Prec::Atom, fun);
+                let fun = self.expr_prec(Prec::Proj, fun);
 
                 self.paren(
                     prec > Prec::App,
@@ -200,6 +201,60 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                         self.scope.to_scope(fun),
                         self.scope.to_scope_from_iter(args.into_iter().rev()),
                     ),
+                )
+            }
+            Expr::RecordType(labels, types) if is_tuple_telescope(labels, types) => {
+                let scope = self.scope;
+                let types = types.iter().map(|r#type| self.expr(r#type));
+                surface::Expr::TupleLit((), scope.to_scope_from_iter(types))
+            }
+            Expr::RecordType(labels, types) => {
+                let scope = self.scope;
+                self.local_names.reserve(labels.len());
+
+                let initial_local_len = self.local_len();
+                let fields = labels.iter().zip(types.iter()).map(|(label, r#type)| {
+                    let r#type = self.expr_prec(Prec::Top, r#type);
+                    self.push_local(Some(*label));
+                    TypeField {
+                        label: ((), *label),
+                        r#type,
+                    }
+                });
+                let fields = scope.to_scope_from_iter(fields);
+                self.truncate_local(initial_local_len);
+                surface::Expr::RecordType((), fields)
+            }
+            Expr::RecordLit(labels, exprs) if is_tuple_labels(labels) => {
+                let scope = self.scope;
+                let exprs = exprs.iter().map(|expr| self.expr(expr));
+                surface::Expr::TupleLit((), scope.to_scope_from_iter(exprs))
+            }
+            Expr::RecordLit(labels, exprs) => {
+                let scope = self.scope;
+                let fields = labels
+                    .iter()
+                    .zip(exprs.iter())
+                    .map(|(label, expr)| ExprField {
+                        label: ((), *label),
+                        expr: self.expr_prec(Prec::Top, expr),
+                    });
+                surface::Expr::RecordLit((), scope.to_scope_from_iter(fields))
+            }
+            Expr::RecordProj(..) => {
+                let mut labels = Vec::new();
+                let mut head = expr;
+
+                while let Expr::RecordProj(next_head, label) = head {
+                    head = next_head;
+                    labels.push(((), *label));
+                }
+
+                let head = self.expr_prec(Prec::Atom, head);
+                surface::Expr::RecordProj(
+                    (),
+                    self.scope.to_scope(head),
+                    self.scope.to_scope_from_iter(labels.into_iter().rev()),
                 )
             }
         }
@@ -223,4 +278,20 @@ fn name_to_pat<'arena>(name: Option<Symbol>) -> surface::Pat<'arena, ()> {
         Some(name) => surface::Pat::Ident((), name),
         None => surface::Pat::Underscore(()),
     }
+}
+
+fn is_tuple_labels(labels: &[Symbol]) -> bool {
+    labels
+        .iter()
+        .enumerate()
+        .all(|(idx, label)| *label == Symbol::from(&format!("_{idx}")))
+}
+
+fn is_tuple_telescope(labels: &[Symbol], r#types: &[Expr]) -> bool {
+    is_tuple_labels(labels)
+        && (1..=types.len()).all(|index| {
+            Index::iter()
+                .zip(types[index..].iter())
+                .all(|(var, expr)| !expr.binds_local(var))
+        })
 }

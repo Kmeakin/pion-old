@@ -1,0 +1,3 @@
+//~ run = "${PION} elab ${FILE}"
+
+{x = false, y = 1, z = 2}

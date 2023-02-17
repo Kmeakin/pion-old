@@ -1,0 +1,6 @@
+exit status: 0
+stdout:
+let _ : { A : Type, a : A } = { A = Bool, a = false };
+() : ()
+
+stderr:

@@ -32,8 +32,11 @@ extern {
         "," => Token::Comma,
         ";" => Token::Semicolon,
         ":" => Token::Colon,
+        "." => Token::Dot,
         "(" => Token::LParen,
         ")" => Token::RParen,
+        "{" => Token::LCurly,
+        "}" => Token::RCurly,
         "=" => Token::Eq,
         "=>" => Token::FatArrow,
     }
@@ -78,16 +81,33 @@ FunExpr: Expr<'arena> = {
 }
 
 AppExpr: Expr<'arena> = {
-    <start: @L> <fun: AtomExpr> <args: AtomExpr+> <end: @R> => Expr::FunApp(ByteRange::new(start, end), scope.to_scope(fun), scope.to_scope_from_iter(args)),
+    <start: @L> <fun: ProjExpr> <args: ProjExpr+> <end: @R> => Expr::FunApp(ByteRange::new(start, end), scope.to_scope(fun), scope.to_scope_from_iter(args)),
+    ProjExpr => <>,
+}
+
+ProjExpr: Expr<'arena> = {
+    <start: @L> <head: AtomExpr> <labels: ("." <RangeIdent>)+> <end: @R> => Expr::RecordProj(ByteRange::new(start, end), scope.to_scope(head), scope.to_scope_from_iter(labels)),
     AtomExpr => <>,
 }
 
 AtomExpr: Expr<'arena> = {
     <start: @L> "(" <expr: Expr> ")" <end: @R> => Expr::Paren(ByteRange::new(start, end), scope.to_scope(expr)),
+    <start: @L> <exprs: Tuple<Expr>> <end: @R> => Expr::TupleLit(ByteRange::new(start, end), exprs),
     <start: @L> <lit: Lit> <end: @R> => Expr::Lit(ByteRange::new(start, end), lit),
     <start: @L> "_" <end: @R> => Expr::Placeholder(ByteRange::new(start, end)),
     <start: @L> <hole: Hole> <end: @R> => Expr::Hole(ByteRange::new(start, end), hole),
     <start: @L> <ident: Ident> <end: @R> => Expr::Ident(ByteRange::new(start, end), ident),
+    <start: @L> "{" "}" <end: @R> => Expr::TupleLit(ByteRange::new(start, end), &[]),
+    <start: @L> "{" <fields: Seq1<TypeField, ",">> "}" <end: @R> => Expr::RecordType(ByteRange::new(start, end), fields),
+    <start: @L> "{" <fields: Seq1<ExprField, ",">> "}" <end: @R> => Expr::RecordLit(ByteRange::new(start, end), fields),
+}
+
+TypeField: TypeField<'arena> = {
+    <label: RangeIdent> ":" <r#type: Expr> => TypeField {label, r#type},
+}
+
+ExprField: ExprField<'arena> = {
+    <label: RangeIdent> "=" <expr: Expr> => ExprField {label, expr},
 }
 
 Param: Param<'arena> = {
@@ -132,12 +152,22 @@ Int: u32 = {
     },
 }
 
+Tuple<Elem>: &'arena [Elem] = {
+    "(" ")" => &[],
+    "(" <elem: Elem> "," ")" => scope.to_scope_from_iter([elem]),
+    "(" <elems: Seq2<Elem, ",">> ")" => elems,
+};
+
 Ann: Expr<'arena> = {
     ":" <expr: LetExpr> => expr,
 }
 
 Ident: Symbol = {
     <ident: "Ident"> => ident.into(),
+}
+
+RangeIdent: (ByteRange, Symbol) = {
+    <start: @L> <ident: "Ident"> <end: @R> => (ByteRange::new(start, end), ident.into()),
 }
 
 Hole: Symbol = {
@@ -153,5 +183,11 @@ Seq<Elem, Sep>: &'arena [Elem] = {
 Seq1<Elem, Sep>: &'arena [Elem] = {
     <first: Elem> <elems: (Sep <Elem>)*> Sep? => {
         scope.to_scope_from_iter(std::iter::once(first).chain(elems))
+    },
+};
+
+Seq2<Elem, Sep>: &'arena [Elem] = {
+    <first: Elem> Sep <second: Elem> <elems: (Sep <Elem>)*> Sep? => {
+        scope.to_scope_from_iter(std::iter::once(first).chain(std::iter::once(second)).chain(elems))
     },
 };

@@ -7,6 +7,8 @@ pub struct PrettyCtx<'arena> {
     scope: &'arena Scope<'arena>,
 }
 
+const INDENT: isize = 4;
+
 type DocBuilder<'arena> = pretty::DocBuilder<'arena, PrettyCtx<'arena>>;
 
 impl<'arena> PrettyCtx<'arena> {
@@ -54,7 +56,64 @@ impl<'arena> PrettyCtx<'arena> {
             Expr::FunApp(_, fun, args) => self
                 .expr(fun)
                 .append(self.concat(args.iter().map(|arg| self.space().append(self.expr(arg))))),
+            Expr::RecordType(_, fields) => self.sequence(
+                true,
+                self.text("{"),
+                fields.iter().map(|field| {
+                    self.ident(field.label.1)
+                        .append(" : ")
+                        .append(self.expr(&field.r#type))
+                }),
+                self.text(","),
+                self.text("}"),
+            ),
+            Expr::RecordLit(_, fields) => self.sequence(
+                true,
+                self.text("{"),
+                fields.iter().map(|field| {
+                    self.ident(field.label.1)
+                        .append(" = ")
+                        .append(self.expr(&field.expr))
+                }),
+                self.text(","),
+                self.text("}"),
+            ),
+            Expr::TupleLit(_, exprs) => self.tuple(exprs),
+            Expr::RecordProj(_, head, labels) => self.expr(head).append(self.concat(
+                (labels.iter()).map(|(_, label)| self.text(".").append(self.ident(*label))),
+            )),
         }
+    }
+
+    /// Pretty prints a delimited sequence of documents with a trailing
+    /// separator if it is formatted over multiple lines.
+    /// If `space` is true, extra spaces are added before and after the
+    /// delimiters
+    pub fn sequence(
+        &'arena self,
+        space: bool,
+        start_delim: DocBuilder<'arena>,
+        docs: impl ExactSizeIterator<Item = DocBuilder<'arena>>,
+        separator: DocBuilder<'arena>,
+        end_delim: DocBuilder<'arena>,
+    ) -> DocBuilder<'arena> {
+        if docs.len() == 0 {
+            return self.concat([start_delim, end_delim]);
+        }
+
+        let docs = self.intersperse(docs, self.concat([separator.clone(), self.line()]));
+        self.concat([
+            start_delim,
+            self.concat([
+                if space { self.line() } else { self.line_() },
+                docs,
+                DocBuilder::flat_alt(separator, self.nil()),
+            ])
+            .nest(INDENT),
+            if space { self.line() } else { self.line_() },
+            end_delim,
+        ])
+        .group()
     }
 
     fn param<Extra>(&'arena self, param: &Param<'_, Extra>) -> DocBuilder<'arena> {
@@ -79,6 +138,22 @@ impl<'arena> PrettyCtx<'arena> {
             Pat::Underscore(_) => self.text("_"),
         }
     }
+
+    fn tuple<Extra>(&'arena self, exprs: &[Expr<'_, Extra>]) -> DocBuilder<'arena> {
+        if exprs.len() == 1 {
+            self.text("(").append(self.expr(&exprs[0]).append(",)"))
+        } else {
+            self.sequence(
+                false,
+                self.text("("),
+                exprs.iter().map(|expr| self.expr(expr)),
+                self.text(","),
+                self.text(")"),
+            )
+        }
+    }
+
+    fn ident(&'arena self, name: Symbol) -> DocBuilder<'arena> { self.text(name.to_owned()) }
 
     fn lit<Extra>(&'arena self, lit: &Lit<Extra>) -> DocBuilder<'arena> {
         match lit {
