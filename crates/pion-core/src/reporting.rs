@@ -3,8 +3,9 @@ use pion_source::location::ByteRange;
 use pion_surface::syntax::Symbol;
 
 use crate::elab::unify::{RenameError, SpineError, UnifyError};
+use crate::elab::MetaSource;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ElabError {
     UnboundName {
         range: ByteRange,
@@ -22,6 +23,9 @@ pub enum ElabError {
         expected_arity: usize,
         actual_arity: usize,
         extra_args_range: ByteRange,
+    },
+    UnsolvedMeta {
+        source: MetaSource,
     },
     Unification {
         range: ByteRange,
@@ -116,6 +120,21 @@ impl ElabError {
                         .with_labels(vec![primary_label(range)])
                 }
             },
+            Self::UnsolvedMeta { source } => {
+                let (range, name) = match source {
+                    MetaSource::PlaceholderExpr(range) => (range, "placeholder expression"),
+                    MetaSource::HoleExpr(range, _) => (range, "hole expression"),
+                    MetaSource::PatType(range) => (range, "pattern type"),
+
+                    // should be impossible
+                    MetaSource::HoleType(range, _) => (range, "hole type"),
+                    MetaSource::PlaceholderType(range) => (range, "placeholder type"),
+                };
+
+                Diagnostic::error()
+                    .with_message(format!("unable to infer {name}"))
+                    .with_labels(vec![primary_label(range)])
+            }
         }
     }
 }

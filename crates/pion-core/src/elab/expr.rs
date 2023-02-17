@@ -2,7 +2,7 @@ use pion_source::location::ByteRange;
 
 use super::*;
 
-impl<'arena> ElabCtx<'arena> {
+impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
     /// Synthesize the type of the given surface expr.
     ///
     /// Returns the elaborated expr in the core language and its type.
@@ -47,7 +47,7 @@ impl<'arena> ElabCtx<'arena> {
                     return (Expr::Prim(prim), r#type.clone());
                 }
 
-                self.errors.push(ElabError::UnboundName {
+                self.emit_error(ElabError::UnboundName {
                     range: *range,
                     name: *name,
                 });
@@ -98,7 +98,7 @@ impl<'arena> ElabCtx<'arena> {
                         _ if expr.is_error() || r#type.is_error() => return synth_error_expr(),
                         _ if arity == 0 => {
                             let fun_type = self.pretty_value(&fun_type);
-                            self.errors.push(ElabError::FunAppNotFun {
+                            self.emit_error(ElabError::FunAppNotFun {
                                 fun_range,
                                 fun_type,
                                 num_args: args.len(),
@@ -112,7 +112,7 @@ impl<'arena> ElabCtx<'arena> {
                         }
                         _ => {
                             let fun_type = self.pretty_value(&fun_type);
-                            self.errors.push(ElabError::FunAppTooManyArgs {
+                            self.emit_error(ElabError::FunAppTooManyArgs {
                                 fun_range,
                                 fun_type,
                                 expected_arity: arity,
@@ -273,7 +273,7 @@ impl<'arena> ElabCtx<'arena> {
             Err(error) => {
                 let found = self.pretty_value(from);
                 let expected = self.pretty_value(to);
-                self.errors.push(ElabError::Unification {
+                self.emit_error(ElabError::Unification {
                     range,
                     found,
                     expected,

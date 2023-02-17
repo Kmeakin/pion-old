@@ -1,9 +1,9 @@
 exit status: 0
 stdout:
-let id : Bool -> Bool = fun (x : Bool) => x; let _ : ?1 = #error;
-let _ : ?2 = #error;
+let id : Bool -> Bool = fun (x : Bool) => x; let _ : #error = #error;
+let _ : #error = #error;
 let always : Bool -> Int -> Int = fun (x : Bool) (y : Int) => y;
-let _ : ?4 = #error; let _ : ?5 = #error; Type : Type
+let _ : #error = #error; let _ : #error = #error; Type : Type
 
 stderr:
 error: tried to apply too many arguments to function

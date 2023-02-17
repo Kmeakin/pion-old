@@ -236,8 +236,6 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         let value2 = self.elim_env().update_metas(value2);
 
         match (&value1, &value2) {
-            _ if value1.is_error() || value2.is_error() => Ok(()),
-
             (Value::Lit(lit1), Value::Lit(lit2)) if lit1 == lit2 => Ok(()),
 
             (Value::Stuck(head1, spine1), Value::Stuck(head2, spine2)) if head1 == head2 => {
@@ -258,6 +256,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
             // attempt to solve it using pattern unification.
             (Value::Stuck(Head::Meta(var), spine), other)
             | (other, Value::Stuck(Head::Meta(var), spine)) => self.solve(*var, spine, other),
+
+            _ if value1.is_error() || value2.is_error() => Ok(()),
 
             _ => Err(UnifyError::Mismatch),
         }

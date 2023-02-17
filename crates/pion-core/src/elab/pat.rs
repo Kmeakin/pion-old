@@ -3,7 +3,7 @@ use pion_source::location::ByteRange;
 use super::expr::synth_lit;
 use super::*;
 
-impl<'arena> ElabCtx<'arena> {
+impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
     pub fn synth_ann_pat(
         &mut self,
         pat: &surface::Pat,
@@ -35,7 +35,7 @@ impl<'arena> ElabCtx<'arena> {
                     Err(error) => {
                         let found = self.pretty_value(&ann_value);
                         let expected = self.pretty_value(expected);
-                        self.errors.push(ElabError::Unification {
+                        self.emit_error(ElabError::Unification {
                             range: ann.range(),
                             error,
                             found,
@@ -93,7 +93,7 @@ impl<'arena> ElabCtx<'arena> {
             Err(error) => {
                 let found = self.pretty_value(from);
                 let expected = self.pretty_value(to);
-                self.errors.push(ElabError::Unification {
+                self.emit_error(ElabError::Unification {
                     range,
                     found,
                     expected,

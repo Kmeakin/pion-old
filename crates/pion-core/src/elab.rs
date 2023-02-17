@@ -15,24 +15,50 @@ mod pat;
 pub mod unify;
 
 /// Elaboration context.
-pub struct ElabCtx<'arena> {
+pub struct ElabCtx<'arena, E: FnMut(ElabError)> {
     scope: &'arena Scope<'arena>,
     prim_env: PrimEnv<'arena>,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
-    pub errors: Vec<ElabError>,
+    on_error: E,
 }
 
-impl<'arena> ElabCtx<'arena> {
-    pub fn new(scope: &'arena Scope<'arena>) -> Self {
+impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
+    pub fn new(scope: &'arena Scope<'arena>, on_error: E) -> Self {
         Self {
             scope,
             prim_env: PrimEnv::new(),
             local_env: LocalEnv::default(),
             meta_env: MetaEnv::default(),
             renaming: PartialRenaming::default(),
-            errors: Vec::new(),
+            on_error,
+        }
+    }
+
+    pub fn elab_expr(&mut self, expr: surface::Expr<'_>) -> (Expr<'arena>, Value<'arena>) {
+        let (expr, r#type) = self.synth(&expr);
+        self.report_unsolved_metas();
+        (expr, r#type)
+    }
+
+    fn emit_error(&mut self, error: ElabError) { (self.on_error)(error) }
+
+    fn report_unsolved_metas(&mut self) {
+        let handler = &mut self.on_error;
+        let meta_env = &self.meta_env;
+
+        for (source, _, value) in meta_env.iter() {
+            match (value, source) {
+                // Ignore solved metas
+                (Some(_), _)
+
+                // These should produce an unsolved HoleExpr/PlaceholderExpr, so avoid reporting
+                // unsolved meta twice
+                | (None, MetaSource::HoleType(..) | MetaSource::PlaceholderType(..)) => {}
+
+                (None, source) => handler(ElabError::UnsolvedMeta { source }),
+            }
         }
     }
 
@@ -205,6 +231,14 @@ impl<'arena> MetaEnv<'arena> {
         self.values.push(None);
 
         level
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (MetaSource, &Value<'arena>, &Option<Value<'arena>>)> {
+        self.sources
+            .iter()
+            .zip(self.types.iter())
+            .zip(self.values.iter())
+            .map(|((source, r#type), value)| (*source, r#type, value))
     }
 }
 

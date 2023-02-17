@@ -42,7 +42,6 @@ fn unwrap_or_exit<T, E: std::fmt::Display>(value: Result<T, E>) -> T {
 fn main() {
     let scope = Scope::new();
     let mut driver = Driver::new();
-
     match Opts::parse() {
         Opts::Parse { file } => {
             let contents = unwrap_or_exit(read_file(&file));
@@ -55,12 +54,10 @@ fn main() {
             let file_id = driver.add_file(&file, contents);
             let expr = driver.parse_expr(&scope, file_id);
 
-            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope);
-            let (expr, r#type) = elab_ctx.synth(&expr);
-            for error in elab_ctx.errors.iter() {
+            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope, |error| {
                 driver.emit_diagnostic(error.to_diagnostic(file_id));
-            }
-
+            });
+            let (expr, r#type) = elab_ctx.elab_expr(expr);
             let r#type = elab_ctx.quote_env().quote(&r#type);
 
             let mut distill_ctx = elab_ctx.distill_ctx();
@@ -77,11 +74,10 @@ fn main() {
             let file_id = driver.add_file(&file, contents);
             let expr = driver.parse_expr(&scope, file_id);
 
-            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope);
-            let (expr, _) = elab_ctx.synth(&expr);
-            for error in elab_ctx.errors.iter() {
+            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope, |error| {
                 driver.emit_diagnostic(error.to_diagnostic(file_id));
-            }
+            });
+            let (expr, _) = elab_ctx.elab_expr(expr);
 
             let expr_value = elab_ctx.eval_env().eval(&expr);
             let expr = elab_ctx.quote_env().quote(&expr_value);
