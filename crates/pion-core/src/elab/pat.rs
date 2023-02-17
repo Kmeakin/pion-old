@@ -1,5 +1,6 @@
 use pion_source::location::ByteRange;
 
+use super::expr::synth_lit;
 use super::*;
 
 impl<'arena> ElabCtx<'arena> {
@@ -51,7 +52,7 @@ impl<'arena> ElabCtx<'arena> {
         match pat {
             surface::Pat::Paren(_, pat) => self.synth_pat(pat),
             surface::Pat::Lit(_, lit) => {
-                let (lit, r#type) = self.synth_lit(lit);
+                let (lit, r#type) = synth_lit(lit);
                 (Pat::Lit(lit), r#type)
             }
             surface::Pat::Ident(range, name) => {
@@ -72,7 +73,7 @@ impl<'arena> ElabCtx<'arena> {
             surface::Pat::Paren(..) => self.check_pat(pat, expected),
             surface::Pat::Ident(_, name) => Pat::Binder(Some(*name)),
             surface::Pat::Underscore(_) => Pat::Binder(None),
-            _ => {
+            surface::Pat::Lit(..) => {
                 let range = pat.range();
                 let (pat, r#type) = self.synth_pat(pat);
                 self.convert_pat(range, pat, &r#type, expected)

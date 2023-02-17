@@ -194,7 +194,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
             Value::Lit(lit) => Expr::Lit(lit),
             Value::Stuck(head, spine) => {
                 let scope = self.elim_env.scope;
-                (spine.iter()).fold(self.quote_head(&head), |head, elim| match elim {
+                (spine.iter()).fold(self.quote_head(head), |head, elim| match elim {
                     Elim::FunApp(arg) => Expr::FunApp(scope.to_scope((head, self.quote(arg)))),
                 })
             }
@@ -214,18 +214,18 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
     }
 
     /// Quote an [elimination head][Head] back into a [expr][Expr].
-    fn quote_head(&mut self, head: &Head) -> Expr<'arena> {
+    fn quote_head(&mut self, head: Head) -> Expr<'arena> {
         let elim_env = self.elim_env;
         match head {
             Head::Error => Expr::Error,
-            Head::Prim(prim) => Expr::Prim(*prim),
-            Head::Local(var) => match self.local_env.level_to_index(*var) {
+            Head::Prim(prim) => Expr::Prim(prim),
+            Head::Local(var) => match self.local_env.level_to_index(var) {
                 Some(var) => Expr::Local(var),
                 None => panic!("Unbound local variable: {var:?}"),
             },
-            Head::Meta(var) => match elim_env.get_meta(*var) {
+            Head::Meta(var) => match elim_env.get_meta(var) {
                 Some(value) => self.quote(value),
-                None => Expr::Meta(*var),
+                None => Expr::Meta(var),
             },
         }
     }

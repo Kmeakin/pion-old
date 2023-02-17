@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn expr_size() {
-        assert_eq!(size_of::<Expr>(), 24);
+        assert_eq!(size_of::<Expr>(), 32);
     }
 
     #[test]

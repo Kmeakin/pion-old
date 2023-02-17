@@ -3,13 +3,6 @@ use pion_source::location::ByteRange;
 use super::*;
 
 impl<'arena> ElabCtx<'arena> {
-    pub(super) fn synth_lit(&mut self, lit: &surface::Lit) -> (Lit, Type<'arena>) {
-        match lit {
-            surface::Lit::Bool(_, value) => (Lit::Bool(*value), Type::BOOL),
-            surface::Lit::Int(_, value) => (Lit::Int(*value), Type::INT),
-        }
-    }
-
     /// Synthesize the type of the given surface expr.
     ///
     /// Returns the elaborated expr in the core language and its type.
@@ -24,7 +17,7 @@ impl<'arena> ElabCtx<'arena> {
                 (expr, type_value)
             }
             surface::Expr::Lit(_, lit) => {
-                let (lit, r#type) = self.synth_lit(lit);
+                let (lit, r#type) = synth_lit(lit);
                 (Expr::Lit(lit), r#type)
             }
             surface::Expr::Placeholder(range) => {
@@ -58,7 +51,7 @@ impl<'arena> ElabCtx<'arena> {
                     range: *range,
                     name: *name,
                 });
-                self.synth_error_expr()
+                synth_error_expr()
             }
             surface::Expr::Let(_, (def, body)) => {
                 let def = self.synth_let_def(def);
@@ -99,9 +92,7 @@ impl<'arena> ElabCtx<'arena> {
                             expr = Expr::FunApp(self.scope.to_scope((expr, arg_expr)));
                             r#type = self.elim_env().apply_closure(codomain, arg_value);
                         }
-                        _ if expr.is_error() || r#type.is_error() => {
-                            return self.synth_error_expr()
-                        }
+                        _ if expr.is_error() || r#type.is_error() => return synth_error_expr(),
                         _ => {
                             let fun_type = self.pretty_value(&r#type);
                             self.errors.push(ElabError::UnexpectedArgument {
@@ -109,7 +100,7 @@ impl<'arena> ElabCtx<'arena> {
                                 fun_type,
                                 arg_range: arg.range(),
                             });
-                            return self.synth_error_expr();
+                            return synth_error_expr();
                         }
                     }
                 }
@@ -117,8 +108,6 @@ impl<'arena> ElabCtx<'arena> {
             }
         }
     }
-
-    fn synth_error_expr(&mut self) -> (Expr<'arena>, Type<'arena>) { (Expr::Error, Type::ERROR) }
 
     fn synth_let_def(&mut self, def: &surface::LetDef) -> LetDef<'arena> {
         let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
@@ -269,5 +258,14 @@ impl<'arena> ElabCtx<'arena> {
                 Expr::Error
             }
         }
+    }
+}
+
+fn synth_error_expr<'arena>() -> (Expr<'arena>, Type<'arena>) { (Expr::Error, Type::ERROR) }
+
+pub(super) fn synth_lit<'arena>(lit: &surface::Lit) -> (Lit, Type<'arena>) {
+    match lit {
+        surface::Lit::Bool(_, value) => (Lit::Bool(*value), Type::BOOL),
+        surface::Lit::Int(_, value) => (Lit::Int(*value), Type::INT),
     }
 }

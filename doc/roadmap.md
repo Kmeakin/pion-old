@@ -12,7 +12,7 @@
 - [x] Pretty printer (surface)
 - [ ] Pretty printer (core)
 - [x] Holes
+- [x] Diagnostic reporting
 - [ ] Implicit parameters
 - [ ] Compiler (core to LLVM)
-- [ ] Diagnostic reporting
 - [ ] Modules

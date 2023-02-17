@@ -12,6 +12,7 @@ impl fmt::Display for BytePos {
 }
 
 impl BytePos {
+    #[allow(clippy::cast_possible_truncation)]
     pub fn truncate(n: usize) -> Self { Self(n as u32) }
 }
 
@@ -19,7 +20,7 @@ impl From<BytePos> for u32 {
     fn from(other: BytePos) -> Self { other.0 }
 }
 impl From<BytePos> for usize {
-    fn from(other: BytePos) -> Self { other.0 as usize }
+    fn from(other: BytePos) -> Self { other.0 as Self }
 }
 impl From<u32> for BytePos {
     fn from(other: u32) -> Self { Self(other) }

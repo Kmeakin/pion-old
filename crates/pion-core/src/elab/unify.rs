@@ -27,8 +27,8 @@ pub struct PartialRenaming {
 
 impl PartialRenaming {
     /// Create a new, empty renaming.
-    pub fn new() -> PartialRenaming {
-        PartialRenaming {
+    pub fn new() -> Self {
+        Self {
             source: UniqueEnv::default(),
             target: EnvLen::default(),
         }
@@ -113,11 +113,11 @@ pub enum UnifyError {
 }
 
 impl From<SpineError> for UnifyError {
-    fn from(error: SpineError) -> UnifyError { UnifyError::Spine(error) }
+    fn from(error: SpineError) -> Self { Self::Spine(error) }
 }
 
 impl From<RenameError> for UnifyError {
-    fn from(error: RenameError) -> UnifyError { UnifyError::Rename(error) }
+    fn from(error: RenameError) -> Self { Self::Rename(error) }
 }
 
 /// An error that was found in the spine of a unification problem.

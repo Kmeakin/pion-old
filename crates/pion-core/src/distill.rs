@@ -43,21 +43,9 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
 
     fn pop_local(&mut self) { self.local_names.pop(); }
 
-    fn lit(&mut self, lit: &Lit) -> surface::Lit<()> {
-        match lit {
-            Lit::Bool(value) => surface::Lit::Bool((), *value),
-            Lit::Int(value) => surface::Lit::Int((), *value),
-        }
-    }
-
-    fn prim(&mut self, prim: &Prim) -> surface::Expr<'arena, ()> {
-        let name = prim.name();
-        surface::Expr::Ident((), Symbol::from(name))
-    }
-
     fn param(&mut self, name: Option<Symbol>, r#type: &Expr<'_>) -> surface::Param<'arena, ()> {
         let param = surface::Param {
-            pat: self.name_to_pat(name),
+            pat: name_to_pat(name),
             r#type: Some(self.expr_prec(Prec::Top, r#type)),
         };
         self.push_local(name);
@@ -67,19 +55,12 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
     fn let_def(&mut self, def: &LetDef<'_>) -> surface::LetDef<'arena, ()> {
         let name = def.name;
         let def = surface::LetDef {
-            pat: self.name_to_pat(def.name),
+            pat: name_to_pat(def.name),
             r#type: Some(self.expr_prec(Prec::Top, &def.r#type)),
             expr: (self.expr_prec(Prec::Let, &def.expr)),
         };
         self.push_local(name);
         def
-    }
-
-    fn name_to_pat(&self, name: Option<Symbol>) -> surface::Pat<'arena, ()> {
-        match name {
-            Some(name) => surface::Pat::Ident((), name),
-            None => surface::Pat::Underscore(()),
-        }
     }
 
     pub fn expr(&mut self, expr: &Expr<'_>) -> surface::Expr<'arena, ()> {
@@ -126,8 +107,8 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                     surface::Expr::FunApp((), self.scope.to_scope(head), args),
                 )
             }
-            Expr::Lit(lit) => surface::Expr::Lit((), self.lit(lit)),
-            Expr::Prim(prim) => self.prim(prim),
+            Expr::Lit(literal) => surface::Expr::Lit((), lit(*literal)),
+            Expr::Prim(primitive) => prim(*primitive),
             Expr::Let((def, body)) => {
                 let def = self.let_def(def);
                 let body = self.expr_prec(Prec::Let, body);
@@ -222,5 +203,24 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 )
             }
         }
+    }
+}
+
+fn lit(lit: Lit) -> surface::Lit<()> {
+    match lit {
+        Lit::Bool(value) => surface::Lit::Bool((), value),
+        Lit::Int(value) => surface::Lit::Int((), value),
+    }
+}
+
+fn prim<'arena>(prim: Prim) -> surface::Expr<'arena, ()> {
+    let name = prim.name();
+    surface::Expr::Ident((), Symbol::from(name))
+}
+
+fn name_to_pat<'arena>(name: Option<Symbol>) -> surface::Pat<'arena, ()> {
+    match name {
+        Some(name) => surface::Pat::Ident((), name),
+        None => surface::Pat::Underscore(()),
     }
 }

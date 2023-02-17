@@ -1,6 +1,6 @@
 use std::fmt;
 
-type RawIdx = u32;
+type RawIdx = usize;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct EnvLen(RawIdx);
@@ -29,18 +29,18 @@ impl EnvLen {
     pub fn pop(&mut self) { self.0 -= 1; }
 
     /// Truncate the environment to `len`.
-    pub fn truncate(&mut self, len: EnvLen) { *self = len; }
+    pub fn truncate(&mut self, len: Self) { *self = len; }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct Index(RawIdx);
 
 impl Index {
-    pub fn new() -> Index { Self(0) }
+    pub fn new() -> Self { Self(0) }
 
     pub fn iter() -> impl Iterator<Item = Self> { (0..).map(Self) }
 
-    pub fn next(self) -> Index { Self(self.0 + 1) }
+    pub fn next(self) -> Self { Self(self.0 + 1) }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
@@ -62,7 +62,7 @@ pub struct UniqueEnv<T> {
 impl<T> Default for UniqueEnv<T> {
     fn default() -> Self {
         Self {
-            entries: Default::default(),
+            entries: Vec::default(),
         }
     }
 }
@@ -76,7 +76,7 @@ impl<T> UniqueEnv<T> {
     where
         T: Clone,
     {
-        self.entries.resize(len.0 as usize, elem)
+        self.entries.resize(len.0, elem);
     }
 
     /// Push `elem` onto the environment.
@@ -86,7 +86,7 @@ impl<T> UniqueEnv<T> {
     pub fn pop(&mut self) -> Option<T> { self.entries.pop() }
 
     /// Truncate the environment to `len`.
-    pub fn truncate(&mut self, len: EnvLen) { self.entries.truncate(len.0 as usize) }
+    pub fn truncate(&mut self, len: EnvLen) { self.entries.truncate(len.0) }
 
     /// Reserve space for `additional` extra elements.
     pub fn reserve(&mut self, additional: usize) { self.entries.reserve(additional) }
@@ -119,7 +119,7 @@ impl<T> SliceEnv<T> {
     }
 
     /// Lookup an element in the environment using a level.
-    pub fn get_level(&self, level: Level) -> Option<&T> { self.entries.get(level.0 as usize) }
+    pub fn get_level(&self, level: Level) -> Option<&T> { self.entries.get(level.0) }
 
     /// Lookup an element in the environment using an index.
     pub fn get_index(&self, index: Index) -> Option<&T> {
@@ -127,7 +127,7 @@ impl<T> SliceEnv<T> {
     }
 
     /// Set an element in the environment using a level
-    pub fn set_level(&mut self, level: Level, entry: T) { self.entries[level.0 as usize] = entry; }
+    pub fn set_level(&mut self, level: Level, entry: T) { self.entries[level.0] = entry; }
 
     /// Iterate over the elements in the environment.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = &T> { self.entries.iter() }
@@ -148,7 +148,7 @@ impl<'a, Entry> From<&'a [Entry]> for &'a SliceEnv<Entry> {
     fn from(entries: &'a [Entry]) -> &'a SliceEnv<Entry> {
         // SAFETY:
         // - `SliceEnv<Entry>` is equivalent to an `[Entry]` internally
-        unsafe { std::mem::transmute::<&[_], &SliceEnv<_>>(entries) }
+        unsafe { &*(entries as *const [Entry] as *const SliceEnv<Entry>) }
     }
 }
 
@@ -156,6 +156,6 @@ impl<'a, Entry> From<&'a mut [Entry]> for &'a mut SliceEnv<Entry> {
     fn from(entries: &'a mut [Entry]) -> &'a mut SliceEnv<Entry> {
         // SAFETY:
         // - `SliceEnv<Entry>` is equivalent to an `[Entry]` internally
-        unsafe { std::mem::transmute::<&mut [_], &mut SliceEnv<_>>(entries) }
+        unsafe { &mut *(entries as *mut [Entry] as *mut SliceEnv<Entry>) }
     }
 }

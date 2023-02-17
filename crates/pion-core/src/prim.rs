@@ -44,16 +44,6 @@ define_prims! {
     Int => "Int",
 }
 
-impl Prim {
-    pub fn r#type(&self) -> Type {
-        match self {
-            Prim::Type => Type::TYPE,
-            Prim::Bool => Type::TYPE,
-            Prim::Int => Type::TYPE,
-        }
-    }
-}
-
 pub struct PrimEnv<'arena> {
     name_to_prim: UstrMap<(Prim, Type<'arena>)>,
 }
