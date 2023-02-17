@@ -10,10 +10,18 @@ pub enum ElabError {
         range: ByteRange,
         name: Symbol,
     },
-    UnexpectedArgument {
+    FunAppNotFun {
         fun_range: ByteRange,
         fun_type: String,
-        arg_range: ByteRange,
+        num_args: usize,
+        args_range: ByteRange,
+    },
+    FunAppTooManyArgs {
+        fun_range: ByteRange,
+        fun_type: String,
+        expected_arity: usize,
+        actual_arity: usize,
+        extra_args_range: ByteRange,
     },
     Unification {
         range: ByteRange,
@@ -30,19 +38,50 @@ impl ElabError {
 
         match self {
             Self::UnboundName { range, name } => Diagnostic::error()
-                .with_message(format!("cannot find {name} in scope"))
+                .with_message(format!("cannot find `{name}` in scope"))
                 .with_labels(vec![primary_label(range)]),
-            Self::UnexpectedArgument {
+            Self::FunAppNotFun {
                 fun_range,
                 fun_type,
-                arg_range,
+                num_args,
+                args_range,
             } => Diagnostic::error()
-                .with_message("expression was applied to an unexpected argument")
+                .with_message(pluralize(
+                    *num_args,
+                    "tried to apply argument to non-function expression",
+                    "tried to apply arguments to non-function expression",
+                ))
                 .with_labels(vec![
-                    primary_label(arg_range).with_message("unexpected argument"),
-                    secondary_label(fun_range)
-                        .with_message(format!("expression of type {fun_type}")),
+                    primary_label(fun_range)
+                        .with_message(format!("expression of type `{fun_type}`")),
+                    secondary_label(args_range).with_message(pluralize(
+                        *num_args,
+                        "argument",
+                        "arguments",
+                    )),
                 ]),
+            Self::FunAppTooManyArgs {
+                fun_range,
+                fun_type,
+                expected_arity,
+                actual_arity,
+                extra_args_range,
+            } => Diagnostic::error()
+                .with_message("tried to apply too many arguments to function")
+                .with_labels(vec![
+                    primary_label(fun_range)
+                        .with_message(format!("expression of type `{fun_type}`")),
+                    secondary_label(extra_args_range).with_message(pluralize(
+                        actual_arity - expected_arity,
+                        "extra argument",
+                        "extra arguments",
+                    )),
+                ])
+                .with_notes(vec![format!(
+                    "help: function expects {expected_arity} {}, but recieved {actual_arity} \
+                     arguments",
+                    pluralize(*expected_arity, "argument", "arguments"),
+                )]),
             Self::Unification {
                 range,
                 found,
@@ -78,5 +117,13 @@ impl ElabError {
                 }
             },
         }
+    }
+}
+
+fn pluralize<T>(amount: usize, single: T, plural: T) -> T {
+    if amount == 1 {
+        single
+    } else {
+        plural
     }
 }

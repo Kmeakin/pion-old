@@ -79,26 +79,50 @@ impl<'arena> ElabCtx<'arena> {
                 self.synth_fun_lit(params, body)
             }
             surface::Expr::FunApp(_, fun, args) => {
-                let (mut expr, mut r#type) = self.synth(fun);
-                let mut fun_range = fun.range();
-                for arg in args.iter() {
+                let (mut expr, r#type) = self.synth(fun);
+
+                let fun_range = fun.range();
+                let fun_type = self.elim_env().update_metas(&r#type);
+                let mut r#type = fun_type.clone();
+
+                for (arity, arg) in args.iter().enumerate() {
                     r#type = self.elim_env().update_metas(&r#type);
                     match r#type {
                         Value::FunType(_, domain, codomain) => {
                             let arg_expr = self.check(arg, domain);
                             let arg_value = self.eval_env().eval(&arg_expr);
 
-                            fun_range = ByteRange::merge(fun_range, arg.range());
                             expr = Expr::FunApp(self.scope.to_scope((expr, arg_expr)));
                             r#type = self.elim_env().apply_closure(codomain, arg_value);
                         }
                         _ if expr.is_error() || r#type.is_error() => return synth_error_expr(),
-                        _ => {
-                            let fun_type = self.pretty_value(&r#type);
-                            self.errors.push(ElabError::UnexpectedArgument {
+                        _ if arity == 0 => {
+                            let fun_type = self.pretty_value(&fun_type);
+                            self.errors.push(ElabError::FunAppNotFun {
                                 fun_range,
                                 fun_type,
-                                arg_range: arg.range(),
+                                num_args: args.len(),
+                                args_range: {
+                                    let first = args.first().unwrap();
+                                    let last = args.last().unwrap();
+                                    ByteRange::merge(first.range(), last.range())
+                                },
+                            });
+                            return synth_error_expr();
+                        }
+                        _ => {
+                            let fun_type = self.pretty_value(&fun_type);
+                            self.errors.push(ElabError::FunAppTooManyArgs {
+                                fun_range,
+                                fun_type,
+                                expected_arity: arity,
+                                actual_arity: args.len(),
+                                extra_args_range: {
+                                    let extra_args = &args[arity..];
+                                    let first_extra = extra_args.first().unwrap();
+                                    let last_extra = extra_args.last().unwrap();
+                                    ByteRange::merge(first_extra.range(), last_extra.range())
+                                },
                             });
                             return synth_error_expr();
                         }

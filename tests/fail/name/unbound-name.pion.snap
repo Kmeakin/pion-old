@@ -1,0 +1,11 @@
+exit status: 0
+stdout:
+#error : #error
+
+stderr:
+error: cannot find `hello` in scope
+  ┌─ tests/fail/name/unbound-name.pion:3:1
+  │
+3 │ hello
+  │ ^^^^^
+

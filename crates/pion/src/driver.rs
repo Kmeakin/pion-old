@@ -2,6 +2,7 @@ use std::path::Path;
 
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFiles;
+use codespan_reporting::term::termcolor::ColorChoice;
 use pion_source::input::InputString;
 use scoped_arena::Scope;
 
@@ -35,9 +36,12 @@ impl Driver {
     }
 
     pub fn emit_diagnostic(&self, diagnostic: Diagnostic<usize>) {
-        let mut writer = codespan_reporting::term::termcolor::StandardStream::stderr(
-            codespan_reporting::term::termcolor::ColorChoice::Auto,
-        );
+        let color = if atty::is(atty::Stream::Stderr) {
+            ColorChoice::Auto
+        } else {
+            ColorChoice::Never
+        };
+        let mut writer = codespan_reporting::term::termcolor::StandardStream::stderr(color);
         codespan_reporting::term::emit(
             &mut writer,
             &self.codespan_config,
