@@ -32,7 +32,7 @@ impl<'arena> PrettyCtx<'arena> {
                 .append(" = ")
                 .append(self.expr(&def.expr))
                 .append(";")
-                .append(self.softline())
+                .append(self.line())
                 .append(self.expr(body)),
             Expr::Arrow(_, (r#type, body)) => {
                 self.expr(r#type).append(" -> ").append(self.expr(body))

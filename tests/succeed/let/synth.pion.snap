@@ -1,5 +1,6 @@
 exit status: 0
 stdout:
-let x : Bool = false; x : Bool
+let x : Bool = false;
+x : Bool
 
 stderr:

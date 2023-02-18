@@ -1,5 +1,6 @@
 exit status: 0
 stdout:
-let _ : Int = 0; Type : Type
+let _ : Int = 0;
+Type : Type
 
 stderr:

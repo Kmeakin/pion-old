@@ -1,5 +1,8 @@
 exit status: 0
 stdout:
-let _ : Type = Type; let _ : Type = Int; let _ : Type = Bool; Type : Type
+let _ : Type = Type;
+let _ : Type = Int;
+let _ : Type = Bool;
+Type : Type
 
 stderr:
