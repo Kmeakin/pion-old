@@ -1,5 +1,4 @@
-use std::ops::Deref;
-
+use pion_surface::syntax::Symbol;
 use scoped_arena::Scope;
 
 use crate::env::{EnvLen, Index, Level, SliceEnv, UniqueEnv};
@@ -8,11 +7,6 @@ use crate::syntax::*;
 pub struct EvalEnv<'arena, 'env> {
     elim_env: ElimEnv<'arena, 'env>,
     local_values: &'env mut UniqueEnv<Value<'arena>>,
-}
-
-impl<'arena, 'env> Deref for EvalEnv<'arena, 'env> {
-    type Target = Scope<'arena>;
-    fn deref(&self) -> &'arena Self::Target { self.elim_env.scope }
 }
 
 impl<'arena, 'env> EvalEnv<'arena, 'env> {
@@ -72,6 +66,19 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 let arg_value = self.eval(arg);
                 self.elim_env.fun_app(fun_value, arg_value)
             }
+            Expr::RecordType(labels, types) => {
+                let telescope = Telescope::new(self.local_values.clone(), types);
+                Value::RecordType(labels, telescope)
+            }
+            Expr::RecordLit(labels, exprs) => {
+                let scope = self.elim_env.scope;
+                let exprs = exprs.iter().map(|expr| self.eval(expr));
+                Value::RecordLit(labels, scope.to_scope_from_iter(exprs))
+            }
+            Expr::RecordProj(head, label) => {
+                let head = self.eval(head);
+                self.elim_env.record_proj(head, *label)
+            }
         }
     }
 
@@ -94,11 +101,6 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
 pub struct ElimEnv<'arena, 'env> {
     scope: &'arena Scope<'arena>,
     meta_values: &'env SliceEnv<Option<Value<'arena>>>,
-}
-
-impl<'arena, 'env> Deref for ElimEnv<'arena, 'env> {
-    type Target = Scope<'arena>;
-    fn deref(&self) -> &'arena Self::Target { self.scope }
 }
 
 impl<'arena, 'env> ElimEnv<'arena, 'env> {
@@ -141,17 +143,34 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
     fn apply_spine(&self, head: Value<'arena>, spine: &[Elim<'arena>]) -> Value<'arena> {
         spine.iter().fold(head, |head, elim| match elim {
             Elim::FunApp(arg) => self.fun_app(head, arg.clone()),
+            Elim::RecordProj(label) => self.record_proj(head, *label),
         })
     }
 
     pub fn fun_app(&self, fun: Value<'arena>, arg: Value<'arena>) -> Value<'arena> {
         match fun {
-            Value::FunLit(.., body) => self.apply_closure(body, arg),
             Value::Stuck(head, mut spine) => {
                 spine.push(Elim::FunApp(arg));
                 Value::Stuck(head, spine)
             }
+            Value::FunLit(.., body) => self.apply_closure(body, arg),
             _ => panic!("Bad fun app: {fun:?} {arg:?}"),
+        }
+    }
+
+    pub fn record_proj(&self, head: Value<'arena>, label: Symbol) -> Value<'arena> {
+        match head {
+            Value::Stuck(head, mut spine) => {
+                spine.push(Elim::RecordProj(label));
+                Value::Stuck(head, spine)
+            }
+            Value::RecordLit(labels, values) => {
+                match Iterator::zip(labels.iter(), values.iter()).find(|(l, _)| **l == label) {
+                    Some((_, value)) => value.clone(),
+                    None => panic!("Bad record proj: label `{label}` not found in `{labels:?}`"),
+                }
+            }
+            _ => panic!("Bad record proj: {head:?} {label}"),
         }
     }
 
@@ -163,6 +182,22 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
         closure.local_values.push(value);
         self.eval_env(&mut closure.local_values).eval(closure.expr)
     }
+
+    pub fn split_telescope(
+        &self,
+        mut telescope: Telescope<'arena>,
+    ) -> Option<(
+        Value<'arena>,
+        impl FnOnce(Value<'arena>) -> Telescope<'arena>,
+    )> {
+        let (expr, exprs) = telescope.exprs.split_first()?;
+        let value = self.eval_env(&mut telescope.local_values).eval(expr);
+        Some((value, move |prev| {
+            telescope.local_values.push(prev);
+            telescope.exprs = exprs;
+            telescope
+        }))
+    }
 }
 
 /// Quotation environment.
@@ -172,11 +207,6 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
 pub struct QuoteEnv<'arena, 'env> {
     elim_env: ElimEnv<'arena, 'env>,
     local_env: EnvLen,
-}
-
-impl<'arena, 'env> Deref for QuoteEnv<'arena, 'env> {
-    type Target = Scope<'arena>;
-    fn deref(&self) -> &'arena Self::Target { self.elim_env.scope }
 }
 
 impl<'arena, 'env> QuoteEnv<'arena, 'env> {
@@ -196,6 +226,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
                 let scope = self.elim_env.scope;
                 (spine.iter()).fold(self.quote_head(head), |head, elim| match elim {
                     Elim::FunApp(arg) => Expr::FunApp(scope.to_scope((head, self.quote(arg)))),
+                    Elim::RecordProj(label) => Expr::RecordProj(scope.to_scope(head), *label),
                 })
             }
             Value::FunType(name, domain, codomain) => {
@@ -209,6 +240,19 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
                 let domain = self.quote(domain);
                 let body = self.quote_closure(&body);
                 Expr::FunType(name, scope.to_scope((domain, body)))
+            }
+            Value::RecordType(labels, telescope) => {
+                let scope = self.elim_env.scope;
+                let types = self.quote_telescope(telescope);
+                Expr::RecordType(scope.to_scope_from_iter(labels.iter().copied()), types)
+            }
+            Value::RecordLit(labels, values) => {
+                let scope = self.elim_env.scope;
+                let values = values.iter().map(|value| self.quote(value));
+                Expr::RecordLit(
+                    scope.to_scope_from_iter(labels.iter().copied()),
+                    scope.to_scope_from_iter(values),
+                )
             }
         }
     }
@@ -230,6 +274,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
         }
     }
 
+    /// Quote a [closure][Closure] back into an [expr][Expr].
     fn quote_closure(&mut self, closure: &Closure) -> Expr<'arena> {
         let arg = Value::local(self.local_env.next_level());
         let value = self.elim_env.apply_closure(closure.clone(), arg);
@@ -239,6 +284,23 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
         self.pop_local();
 
         expr
+    }
+
+    /// Quote a [telescope][Telescope] back into a slice of [exprs][Expr].
+    fn quote_telescope(&mut self, telescope: Telescope) -> &'arena [Expr<'arena>] {
+        let initial_local_len = self.local_env;
+        let mut telescope = telescope;
+        let mut exprs = Vec::with_capacity(telescope.len());
+
+        while let Some((value, cont)) = self.elim_env.split_telescope(telescope) {
+            let var = Value::local(self.local_env.next_level());
+            telescope = cont(var);
+            exprs.push(self.quote(&value));
+            self.local_env.push();
+        }
+
+        self.local_env.truncate(initial_local_len);
+        self.elim_env.scope.to_scope_from_iter(exprs)
     }
 
     fn push_local(&mut self) { self.local_env.push(); }

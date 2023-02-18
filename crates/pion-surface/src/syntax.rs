@@ -1,4 +1,4 @@
-use pion_source::input::InputString;
+pub use pion_source::input::InputString;
 use pion_source::location::{BytePos, ByteRange};
 use scoped_arena::Scope;
 
@@ -39,12 +39,28 @@ pub enum Expr<'arena, Extra = ByteRange> {
     FunType(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunLit(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunApp(Extra, &'arena Self, &'arena [Self]),
+    RecordType(Extra, &'arena [TypeField<'arena, Extra>]),
+    RecordLit(Extra, &'arena [ExprField<'arena, Extra>]),
+    TupleLit(Extra, &'arena [Self]),
+    RecordProj(Extra, &'arena Self, &'arena [(Extra, Symbol)]),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct LetDef<'arena, Extra = ByteRange> {
     pub pat: Pat<'arena, Extra>,
     pub r#type: Option<Expr<'arena, Extra>>,
+    pub expr: Expr<'arena, Extra>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct TypeField<'arena, Extra = ByteRange> {
+    pub label: (Extra, Symbol),
+    pub r#type: Expr<'arena, Extra>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct ExprField<'arena, Extra = ByteRange> {
+    pub label: (Extra, Symbol),
     pub expr: Expr<'arena, Extra>,
 }
 
@@ -65,7 +81,11 @@ impl<'arena, Extra> Expr<'arena, Extra> {
             | Expr::Arrow(range, ..)
             | Expr::FunType(range, ..)
             | Expr::FunLit(range, ..)
-            | Expr::FunApp(range, ..) => range.clone(),
+            | Expr::FunApp(range, ..)
+            | Expr::RecordType(range, ..)
+            | Expr::RecordLit(range, ..)
+            | Expr::TupleLit(range, ..)
+            | Expr::RecordProj(range, ..) => range.clone(),
         }
     }
 }

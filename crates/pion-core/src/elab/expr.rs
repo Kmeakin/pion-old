@@ -130,6 +130,152 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 }
                 (expr, r#type)
             }
+            surface::Expr::RecordType(_, fields) => {
+                let mut labels = Vec::with_capacity(fields.len());
+                let mut types = Vec::with_capacity(fields.len());
+
+                let len = self.local_env.len();
+                for field in fields.iter() {
+                    let r#type = self.check(&field.r#type, &Type::TYPE);
+                    let type_value = self.eval_env().eval(&r#type);
+
+                    let (label_range, label) = field.label;
+                    if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
+                        self.emit_error(ElabError::RecordFieldDuplicate {
+                            name: "record type",
+                            label,
+                            first_range: *first_range,
+                            duplicate_range: label_range,
+                        });
+                    } else {
+                        self.local_env.push_param(Some(label), type_value);
+                        labels.push((label_range, label));
+                        types.push(r#type);
+                    }
+                }
+                self.local_env.truncate(len);
+
+                let labels = self
+                    .scope
+                    .to_scope_from_iter(labels.iter().map(|(_, label)| *label));
+                let types = self.scope.to_scope_from_iter(types);
+                (Expr::RecordType(labels, types), Type::TYPE)
+            }
+            surface::Expr::RecordLit(_, fields) => {
+                let mut labels = Vec::with_capacity(fields.len());
+                let mut exprs = Vec::with_capacity(fields.len());
+                let mut types = Vec::with_capacity(fields.len());
+
+                for field in fields.iter() {
+                    let (expr, type_value) = self.synth(&field.expr);
+                    let r#type = self.quote_env().quote(&type_value);
+
+                    let (label_range, label) = field.label;
+                    if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
+                        self.emit_error(ElabError::RecordFieldDuplicate {
+                            name: "record literal",
+                            label,
+                            first_range: *first_range,
+                            duplicate_range: label_range,
+                        });
+                    } else {
+                        labels.push((label_range, label));
+                        exprs.push(expr);
+                        types.push(r#type);
+                    }
+                }
+
+                let labels = self
+                    .scope
+                    .to_scope_from_iter(labels.iter().map(|(_, label)| *label));
+                let exprs = self.scope.to_scope_from_iter(exprs);
+                let types = self.scope.to_scope_from_iter(types);
+
+                let telescope = Telescope::new(self.local_env.values.clone(), types);
+                (
+                    Expr::RecordLit(labels, exprs),
+                    Value::RecordType(labels, telescope),
+                )
+            }
+            surface::Expr::TupleLit(_, elems) => {
+                let mut labels = Vec::with_capacity(elems.len());
+                let mut exprs = Vec::with_capacity(elems.len());
+                let mut types = Vec::with_capacity(elems.len());
+
+                for (idx, expr) in elems.iter().enumerate() {
+                    let (expr, type_value) = self.synth(expr);
+                    let r#type = self.quote_env().quote(&type_value);
+                    labels.push(Symbol::from(&format!("_{idx}")));
+                    exprs.push(expr);
+                    types.push(r#type);
+                }
+
+                let labels = self.scope.to_scope_from_iter(labels);
+                let exprs = self.scope.to_scope_from_iter(exprs);
+                let types = self.scope.to_scope_from_iter(types);
+
+                let telescope = Telescope::new(self.local_env.values.clone(), types);
+                (
+                    Expr::RecordLit(labels, exprs),
+                    Value::RecordType(labels, telescope),
+                )
+            }
+            surface::Expr::RecordProj(_, head, labels) => {
+                let mut head_range = head.range();
+                let (mut head_expr, mut head_type) = self.synth(head);
+
+                for (label_range, proj_label) in labels.iter() {
+                    head_type = self.elim_env().update_metas(&head_type);
+                    match &head_type {
+                        _ if head_expr.is_error() || head_type.is_error() => {
+                            return synth_error_expr()
+                        }
+
+                        Value::RecordType(labels, telescope) => {
+                            let mut telescope = telescope.clone();
+                            let mut labels = labels.iter();
+                            while let Some((label, (r#type, cont))) = Option::zip(
+                                labels.next(),
+                                self.elim_env().split_telescope(telescope.clone()),
+                            ) {
+                                if proj_label == label {
+                                    head_range = ByteRange::merge(head_range, *label_range);
+                                    head_expr = Expr::RecordProj(
+                                        self.scope.to_scope(head_expr),
+                                        *proj_label,
+                                    );
+                                    head_type = r#type;
+                                    continue;
+                                }
+
+                                let head_value = self.eval_env().eval(&head_expr);
+                                let value = self.elim_env().record_proj(head_value, *label);
+                                telescope = cont(value);
+                            }
+                        }
+
+                        _ => {
+                            let head_type = self.pretty_value(&head_type);
+                            self.emit_error(ElabError::RecordProjNotRecord {
+                                head_range,
+                                head_type,
+                                label_range: *label_range,
+                                label: *proj_label,
+                            });
+                            return synth_error_expr();
+                        }
+                    }
+
+                    let head_type = self.pretty_value(&head_type);
+                    self.emit_error(ElabError::RecordProjNotFound {
+                        head_range,
+                        head_type,
+                        label_range: *label_range,
+                        label: *proj_label,
+                    });
+                }
+                (head_expr, head_type)
+            }
         }
     }
 
@@ -252,6 +398,46 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             (surface::Expr::FunLit(range, params, body), _) => {
                 self.local_env.reserve(params.len());
                 self.check_fun_lit(*range, params, body, &expected)
+            }
+            (surface::Expr::TupleLit(_, elems), _) if expected.is_type() => {
+                let mut labels = Vec::with_capacity(elems.len());
+                let mut types = Vec::with_capacity(elems.len());
+
+                let len = self.local_env.len();
+                for (idx, expr) in elems.iter().enumerate() {
+                    let r#type = self.check(expr, &Type::TYPE);
+                    let label = Symbol::from(&format!("_{idx}"));
+                    labels.push(label);
+                    types.push(r#type);
+                    let type_value = self.eval_env().eval(&r#type);
+                    self.local_env.push_param(Some(label), type_value);
+                }
+                self.local_env.truncate(len);
+
+                let labels = self.scope.to_scope_from_iter(labels);
+                let types = self.scope.to_scope_from_iter(types);
+
+                Expr::RecordType(labels, types)
+            }
+            (surface::Expr::RecordLit(_, fields), Value::RecordType(labels, telescope))
+                if Iterator::eq(
+                    fields.iter().map(|field| field.label.1),
+                    labels.iter().copied(),
+                ) =>
+            {
+                let mut telescope = telescope.clone();
+                let mut fields = fields.iter();
+                let mut exprs = Vec::with_capacity(telescope.len());
+
+                while let Some((field, (r#type, cont))) =
+                    Option::zip(fields.next(), self.elim_env().split_telescope(telescope))
+                {
+                    let expr = self.check(&field.expr, &r#type);
+                    telescope = cont(self.eval_env().eval(&expr));
+                    exprs.push(expr);
+                }
+
+                Expr::RecordLit(labels, self.scope.to_scope_from_iter(exprs))
             }
             _ => {
                 let range = expr.range();

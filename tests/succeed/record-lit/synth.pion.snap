@@ -1,0 +1,5 @@
+exit status: 0
+stdout:
+{ x = false, y = 1, z = 2 } : { x : Bool, y : Int, z : Int }
+
+stderr:

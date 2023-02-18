@@ -168,6 +168,8 @@ pub enum SpineError {
     /// An eliminator was found in the problem spine which was not a
     /// metavariable.
     NonLocalFunApp,
+    /// A record projection was found in the problem spine.
+    RecordProj(Symbol),
 }
 
 /// An error that occurred when renaming the solution.
@@ -252,6 +254,19 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                 self.unify_fun_lit(body, other)
             }
 
+            (Value::RecordType(labels1, telescope1), Value::RecordType(labels2, telescope2))
+                if labels1 == labels2 =>
+            {
+                self.unify_telescopes(telescope1, telescope2)
+            }
+            (Value::RecordLit(labels1, values1), Value::RecordLit(labels2, values2))
+                if labels1 == labels2 =>
+            {
+                self.unify_all(values1, values2)
+            }
+            (Value::RecordLit(labels, exprs), _) => self.unify_record_lit(labels, exprs, &value2),
+            (_, Value::RecordLit(labels, exprs)) => self.unify_record_lit(labels, exprs, &value1),
+
             // One of the values has a metavariable at its head, so we
             // attempt to solve it using pattern unification.
             (Value::Stuck(Head::Meta(var), spine), other)
@@ -261,6 +276,21 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
 
             _ => Err(UnifyError::Mismatch),
         }
+    }
+
+    fn unify_all(
+        &mut self,
+        values1: &[Value<'arena>],
+        values2: &[Value<'arena>],
+    ) -> Result<(), UnifyError> {
+        if values1.len() != values2.len() {
+            return Err(UnifyError::Mismatch);
+        }
+
+        for (value1, value2) in values1.iter().zip(values2) {
+            self.unify(value1, value2)?;
+        }
+        Ok(())
     }
 
     /// Unify two elimination spines.
@@ -276,6 +306,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         for (elim1, elim2) in Iterator::zip(spine1.iter(), spine2.iter()) {
             match (elim1, elim2) {
                 (Elim::FunApp(arg1), Elim::FunApp(arg2)) => self.unify(arg1, arg2)?,
+                (Elim::RecordProj(label1), Elim::RecordProj(label2)) if label1 == label2 => {}
+                _ => return Err(UnifyError::Mismatch),
             }
         }
         Ok(())
@@ -299,9 +331,42 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         result
     }
 
+    /// Unify two [telescopes][Telescope].
+    fn unify_telescopes(
+        &mut self,
+        telescope1: &Telescope<'arena>,
+        telescope2: &Telescope<'arena>,
+    ) -> Result<(), UnifyError> {
+        if telescope1.len() != telescope2.len() {
+            return Err(UnifyError::Mismatch);
+        }
+
+        let len = self.local_env;
+        let mut telescope1 = telescope1.clone();
+        let mut telescope2 = telescope2.clone();
+
+        while let Some(((value1, cont1), (value2, cont2))) = Option::zip(
+            self.elim_env().split_telescope(telescope1),
+            self.elim_env().split_telescope(telescope2),
+        ) {
+            if let Err(error) = self.unify(&value1, &value2) {
+                self.local_env.truncate(len);
+                return Err(error);
+            }
+
+            let var = Value::local(self.local_env.next_level());
+            telescope1 = cont1(var.clone());
+            telescope2 = cont2(var);
+            self.local_env.push();
+        }
+
+        self.local_env.truncate(len);
+        Ok(())
+    }
+
     /// Unify a function literal with a value, using eta-conversion.
     ///
-    /// ```fathom
+    /// ```pion
     /// (fun x => f x) = f
     /// ```
     fn unify_fun_lit(
@@ -318,6 +383,24 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         self.local_env.pop();
 
         result
+    }
+
+    /// Unify a record literal with a value, using eta-conversion.
+    ///
+    /// ```pion
+    /// { x = r.x, y = r.y, .. } = r
+    /// ```
+    fn unify_record_lit(
+        &mut self,
+        labels: &[Symbol],
+        exprs: &[Value<'arena>],
+        value: &Value<'arena>,
+    ) -> Result<(), UnifyError> {
+        for (label, value1) in labels.iter().zip(exprs.iter()) {
+            let value2 = self.elim_env().record_proj(value.clone(), *label);
+            self.unify(value1, &value2)?;
+        }
+        Ok(())
     }
 
     /// Solve a pattern unification problem that looks like:
@@ -363,6 +446,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                     }
                     _ => return Err(SpineError::NonLocalFunApp),
                 },
+                Elim::RecordProj(label) => return Err(SpineError::RecordProj(*label)),
             }
         }
         Ok(())
@@ -373,6 +457,9 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     fn fun_intros(&self, spine: &[Elim<'arena>], expr: Expr<'arena>) -> Expr<'arena> {
         spine.iter().fold(expr, |expr, elim| match elim {
             Elim::FunApp(..) => Expr::FunLit(None, self.scope.to_scope((Expr::Error, expr))),
+            Elim::RecordProj(_) => {
+                unreachable!("should have been caught by `init_renaming`")
+            }
         })
     }
 
@@ -410,6 +497,9 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                         let arg = self.rename(meta_var, arg)?;
                         Ok(Expr::FunApp(self.scope.to_scope((head, arg))))
                     }
+                    Elim::RecordProj(label) => {
+                        Ok(Expr::RecordProj(self.scope.to_scope(head), *label))
+                    }
                 })
             }
             Value::FunType(name, domain, body) => {
@@ -421,6 +511,22 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                 let domain = self.rename(meta_var, domain)?;
                 let body = self.rename_closure(meta_var, &body)?;
                 Ok(Expr::FunLit(name, self.scope.to_scope((domain, body))))
+            }
+            Value::RecordType(labels, telescope) => {
+                let types = self.rename_telescope(meta_var, telescope)?;
+                Ok(Expr::RecordType(labels, types))
+            }
+            Value::RecordLit(labels, values) => {
+                let mut exprs = Vec::with_capacity(values.len());
+
+                for value in values.iter() {
+                    exprs.push(self.rename(meta_var, value)?);
+                }
+
+                Ok(Expr::RecordLit(
+                    labels,
+                    self.scope.to_scope_from_iter(exprs),
+                ))
             }
         }
     }
@@ -439,5 +545,34 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         self.renaming.pop_local();
 
         expr
+    }
+
+    /// Rename a telescope back into a [`Expr`].
+    fn rename_telescope(
+        &mut self,
+        meta_var: Level,
+        telescope: Telescope<'arena>,
+    ) -> Result<&'arena [Expr<'arena>], RenameError> {
+        let initial_renaming_len = self.renaming.len();
+        let mut telescope = telescope;
+        let mut exprs = Vec::with_capacity(telescope.len());
+
+        while let Some((value, cont)) = self.elim_env().split_telescope(telescope) {
+            match self.rename(meta_var, &value) {
+                Ok(expr) => {
+                    exprs.push(expr);
+                    let source_var = self.renaming.next_local_var();
+                    telescope = cont(source_var);
+                    self.renaming.push_local();
+                }
+                Err(error) => {
+                    self.renaming.truncate(initial_renaming_len);
+                    return Err(error);
+                }
+            }
+        }
+
+        self.renaming.truncate(initial_renaming_len);
+        Ok(self.scope.to_scope_from_iter(exprs))
     }
 }

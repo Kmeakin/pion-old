@@ -15,6 +15,9 @@ pub enum Expr<'arena> {
     FunType(Option<Symbol>, &'arena (Self, Self)),
     FunLit(Option<Symbol>, &'arena (Self, Self)),
     FunApp(&'arena (Self, Self)),
+    RecordType(&'arena [Symbol], &'arena [Self]),
+    RecordLit(&'arena [Symbol], &'arena [Self]),
+    RecordProj(&'arena Self, Symbol),
 }
 
 impl<'arena> Expr<'arena> {
@@ -33,6 +36,11 @@ impl<'arena> Expr<'arena> {
                 param.binds_local(var) || body.binds_local(var.next())
             }
             Expr::FunApp((fun, arg)) => fun.binds_local(var) || arg.binds_local(var),
+            Expr::RecordType(_, types) => Index::iter_from(var)
+                .zip(types.iter())
+                .any(|(var, expr)| expr.binds_local(var)),
+            Expr::RecordLit(_, exprs) => exprs.iter().any(|expr| expr.binds_local(var)),
+            Expr::RecordProj(expr, _) => expr.binds_local(var),
         }
     }
 }
@@ -62,6 +70,8 @@ pub enum Value<'arena> {
     Stuck(Head, Vec<Elim<'arena>>),
     FunType(Option<Symbol>, &'arena Self, Closure<'arena>),
     FunLit(Option<Symbol>, &'arena Self, Closure<'arena>),
+    RecordType(&'arena [Symbol], Telescope<'arena>),
+    RecordLit(&'arena [Symbol], &'arena [Self]),
 }
 
 impl<'arena> Value<'arena> {
@@ -77,6 +87,10 @@ impl<'arena> Value<'arena> {
 
     pub const fn meta(level: Level) -> Self { Self::Stuck(Head::Meta(level), Vec::new()) }
 
+    pub fn is_type(&self) -> bool {
+        matches!(self, Value::Stuck(Head::Prim(Prim::Type), elims) if elims.is_empty())
+    }
+
     pub const fn is_error(&self) -> bool { matches!(self, Self::Stuck(Head::Error, _)) }
 }
 
@@ -91,6 +105,7 @@ pub enum Head {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Elim<'arena> {
     FunApp(Value<'arena>),
+    RecordProj(Symbol),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +118,23 @@ impl<'arena> Closure<'arena> {
     pub fn new(local_values: UniqueEnv<Value<'arena>>, expr: &'arena Expr<'arena>) -> Self {
         Self { local_values, expr }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Telescope<'arena> {
+    pub local_values: UniqueEnv<Value<'arena>>,
+    pub exprs: &'arena [Expr<'arena>],
+}
+
+impl<'arena> Telescope<'arena> {
+    pub fn new(local_values: UniqueEnv<Value<'arena>>, exprs: &'arena [Expr<'arena>]) -> Self {
+        Self {
+            local_values,
+            exprs,
+        }
+    }
+
+    pub fn len(&self) -> usize { self.exprs.len() }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -135,12 +167,12 @@ mod tests {
 
     #[test]
     fn expr_size() {
-        assert_eq!(size_of::<Expr>(), 32);
+        assert_eq!(size_of::<Expr>(), 40);
     }
 
     #[test]
     fn value_size() {
-        assert_eq!(size_of::<Value>(), 56);
+        assert_eq!(size_of::<Value>(), 64);
     }
 
     #[test]

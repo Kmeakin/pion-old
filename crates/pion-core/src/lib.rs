@@ -8,8 +8,10 @@
     clippy::must_use_candidate,
     clippy::new_without_default,
     clippy::option_if_let_else,
+    clippy::similar_names,
     clippy::too_many_lines,
-    clippy::wildcard_imports
+    clippy::wildcard_imports,
+    clippy::len_without_is_empty
 )]
 
 pub mod distill;

@@ -33,8 +33,11 @@ pub enum Token<'src> {
     #[token(",")]  Comma,
     #[token(";")]  Semicolon,
     #[token(":")]  Colon,
+    #[token(".")]  Dot,
     #[token("(")]  LParen,
     #[token(")")]  RParen,
+    #[token("{")]  LCurly,
+    #[token("}")]  RCurly,
     #[token("=")]  Eq,
     #[token("=>")] FatArrow,
 }
@@ -57,8 +60,11 @@ impl<'src> Token<'src> {
             Token::Comma => "`,`",
             Token::Semicolon => "`;`",
             Token::Colon => "`:`",
+            Token::Dot => "`.`",
             Token::LParen => "`(`",
             Token::RParen => "`)`",
+            Token::LCurly => "`{`",
+            Token::RCurly => "`}`",
             Token::Eq => "`=`",
             Token::FatArrow => "`=>`",
         }

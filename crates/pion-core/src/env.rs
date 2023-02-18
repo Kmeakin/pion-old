@@ -40,6 +40,8 @@ impl Index {
 
     pub fn iter() -> impl Iterator<Item = Self> { (0..).map(Self) }
 
+    pub fn iter_from(self) -> impl Iterator<Item = Self> { (self.0..).map(Self) }
+
     pub fn next(self) -> Self { Self(self.0 + 1) }
 }
 
