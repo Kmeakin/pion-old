@@ -7,6 +7,7 @@
     - [ ] `pion format`
     - [ ] `pion compile`
 - [x] Dependent lambda calculus (lambda, pi, app)
+- [x] Records
 - [x] Unification
 - [x] Distillation (core to surface)
 - [x] Pretty printer (surface)
