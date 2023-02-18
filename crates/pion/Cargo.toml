@@ -7,7 +7,6 @@ edition = "2021"
 atty = "0.2.14"
 clap = { version = "4.1.1", features = ["derive"] }
 codespan-reporting = "0.11.1"
-itertools = "0.10.5"
 pion-core = { version = "0.1.0", path = "../pion-core" }
 pion-source = { version = "0.1.0", path = "../pion-source" }
 pion-surface = { version = "0.1.0", path = "../pion-surface" }
@@ -21,7 +20,6 @@ harness = false
 
 [dev-dependencies]
 expect-test = "1.4.0"
-itertools = "0.10.5"
 libtest-mimic = "0.6.0"
 serde = { version = "1.0.152", features = ["derive"] }
 shlex = "1.1.0"

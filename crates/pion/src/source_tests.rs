@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
-use itertools::Itertools;
 use serde::Deserialize;
 use walkdir::WalkDir;
 
@@ -38,10 +37,11 @@ fn main() {
 
             // Collect the lines with CONFIG_COMMENT_START prefix, stripping the prefix in
             // the process
-            let config_source = input_source
+            let config_source: String = input_source
                 .lines()
                 .filter_map(|line| line.split(CONFIG_COMMENT_START).nth(1))
-                .join("\n");
+                .map(|s| format!("{s}\n")) // TODO: replace with `intersperse` when it is stabilized
+                .collect();
 
             // Parse those lines as TOML
             let config = match toml::from_str::<Config>(&config_source) {
