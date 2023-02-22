@@ -2,7 +2,7 @@ use pion_surface::syntax::{self as surface, ExprField, Symbol, TypeField};
 use scoped_arena::Scope;
 
 use crate::elab::MetaSource;
-use crate::env::{EnvLen, Index, Level, UniqueEnv};
+use crate::env::{EnvLen, Level, UniqueEnv};
 use crate::prim::Prim;
 use crate::syntax::*;
 
@@ -129,7 +129,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                     match body {
                         // Use an explicit parameter if it is referenced in the body
                         Expr::FunType(name, (r#type, next_body))
-                            if next_body.binds_local(Index::new()) =>
+                            if next_body.binds_local(EnvLen::default()) =>
                         {
                             params.push(self.param(*name, r#type));
                             body = next_body;
@@ -290,7 +290,7 @@ fn is_tuple_labels(labels: &[Symbol]) -> bool {
 fn is_tuple_telescope(labels: &[Symbol], r#types: &[Expr]) -> bool {
     is_tuple_labels(labels)
         && (1..=types.len()).all(|index| {
-            Index::iter()
+            EnvLen::iter()
                 .zip(types[index..].iter())
                 .all(|(var, expr)| !expr.binds_local(var))
         })

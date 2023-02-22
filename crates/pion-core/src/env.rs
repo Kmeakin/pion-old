@@ -30,6 +30,12 @@ impl EnvLen {
 
     /// Truncate the environment to `len`.
     pub fn truncate(&mut self, len: Self) { *self = len; }
+
+    pub fn iter() -> impl Iterator<Item = Self> { (0..).map(Self) }
+}
+
+impl PartialEq<Index> for EnvLen {
+    fn eq(&self, other: &Index) -> bool { self.0 == other.0 }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
@@ -43,6 +49,10 @@ impl Index {
     pub fn iter_from(self) -> impl Iterator<Item = Self> { (self.0..).map(Self) }
 
     pub fn next(self) -> Self { Self(self.0 + 1) }
+}
+
+impl PartialEq<EnvLen> for Index {
+    fn eq(&self, other: &EnvLen) -> bool { self.0 == other.0 }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]

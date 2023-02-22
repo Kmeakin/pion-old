@@ -1,6 +1,9 @@
+use std::ops::ControlFlow;
+
+use internal_iterator::InternalIterator;
 use pion_surface::syntax::Symbol;
 
-use crate::env::{Index, Level, UniqueEnv};
+use crate::env::{EnvLen, Index, Level, UniqueEnv};
 use crate::prim::Prim;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -21,27 +24,9 @@ pub enum Expr<'arena> {
 }
 
 impl<'arena> Expr<'arena> {
-    pub fn binds_local(&self, var: Index) -> bool {
-        match self {
-            Expr::Error | Expr::Lit(_) | Expr::Prim(_) | Expr::Meta(_) | Expr::InsertedMeta(..) => {
-                false
-            }
-            Expr::Local(v) => *v == var,
-            Expr::Let((def, body)) => {
-                def.r#type.binds_local(var)
-                    || def.expr.binds_local(var)
-                    || body.binds_local(var.next())
-            }
-            Expr::FunType(_, (param, body)) | Expr::FunLit(_, (param, body)) => {
-                param.binds_local(var) || body.binds_local(var.next())
-            }
-            Expr::FunApp((fun, arg)) => fun.binds_local(var) || arg.binds_local(var),
-            Expr::RecordType(_, types) => Index::iter_from(var)
-                .zip(types.iter())
-                .any(|(var, expr)| expr.binds_local(var)),
-            Expr::RecordLit(_, exprs) => exprs.iter().any(|expr| expr.binds_local(var)),
-            Expr::RecordProj(expr, _) => expr.binds_local(var),
-        }
+    pub fn binds_local(&self, var: EnvLen) -> bool {
+        self.subexprs(var)
+            .any(|(env, expr)| matches!(expr, Expr::Local(var) if env == *var))
     }
 }
 
@@ -178,5 +163,83 @@ mod tests {
     #[test]
     fn lit_size() {
         assert_eq!(size_of::<Lit>(), 8);
+    }
+}
+
+impl<'arena> Expr<'arena> {
+    /// Iterate over the subexpressions of `self`
+    pub fn subexprs<'a>(
+        &'a self,
+        env: EnvLen,
+    ) -> impl InternalIterator<Item = (EnvLen, &'a Expr<'arena>)> {
+        Subexprs { expr: self, env }
+    }
+}
+
+struct Subexprs<'a, 'arena> {
+    env: EnvLen,
+    expr: &'a Expr<'arena>,
+}
+
+impl<'a, 'arena> InternalIterator for Subexprs<'a, 'arena> {
+    type Item = (EnvLen, &'a Expr<'arena>);
+
+    fn try_for_each<R, F>(mut self, mut f: F) -> ControlFlow<R>
+    where
+        F: FnMut(Self::Item) -> ControlFlow<R>,
+    {
+        self.helper(self.expr, &mut f)
+    }
+}
+
+impl<'a, 'arena> Subexprs<'a, 'arena> {
+    fn helper<R>(
+        &mut self,
+        expr: &'a Expr<'arena>,
+        f: &mut impl FnMut((EnvLen, &'a Expr<'arena>)) -> ControlFlow<R>,
+    ) -> ControlFlow<R> {
+        f((self.env, expr))?;
+
+        match expr {
+            Expr::Error
+            | Expr::Lit(_)
+            | Expr::Prim(_)
+            | Expr::Local(_)
+            | Expr::Meta(_)
+            | Expr::InsertedMeta(..) => {}
+            Expr::Let((def, body)) => {
+                self.helper(&def.r#type, f)?;
+                self.helper(&def.expr, f)?;
+                self.env.push();
+                self.helper(body, f)?;
+                self.env.pop();
+            }
+            Expr::FunType(_, (r#type, body)) | Expr::FunLit(_, (r#type, body)) => {
+                self.helper(r#type, f)?;
+                self.env.push();
+                self.helper(body, f)?;
+                self.env.pop();
+            }
+            Expr::FunApp((fun, arg)) => {
+                self.helper(fun, f)?;
+                self.helper(arg, f)?;
+            }
+            Expr::RecordType(_, exprs) => {
+                let len = self.env;
+                for expr in exprs.iter() {
+                    self.helper(expr, f)?;
+                    self.env.push();
+                }
+                self.env.truncate(len);
+            }
+            Expr::RecordLit(_, exprs) => {
+                for expr in exprs.iter() {
+                    self.helper(expr, f)?;
+                }
+            }
+            Expr::RecordProj(head, ..) => self.helper(head, f)?,
+        }
+
+        ControlFlow::Continue(())
     }
 }
