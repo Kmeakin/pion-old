@@ -6,6 +6,7 @@ use crate::syntax::*;
 use crate::reporting::{TokenError, SyntaxError};
 
 grammar<'arena, 'source>(
+    builder: Builder<'arena>,
     scope: &'arena Scope<'arena>,
     errors: &mut Vec<SyntaxError>,
 );
@@ -44,29 +45,16 @@ extern {
 }
 
 pub Def: Def<'arena> = {
-    <start: @L> "def" <name: Ident> <r#type: Ann?> "=" <expr: Expr> ";" <end: @R> =>
-        Def {
-            extra: ByteRange::new(start, end),
-            name,
-            r#type: r#type.map(|r#type| scope.to_scope(r#type) as &_),
-            expr,
-        },
+    <start: @L> "def" <name: Ident> <r#type: Ann?> "=" <expr: Expr> ";" <end: @R> => builder.def((start, end), name, r#type, expr),
 }
 
-
 pub Expr: Expr<'arena> = {
-    <start: @L> <expr: LetExpr> ":" <r#type: LetExpr> <end: @R> => {
-        Expr::Ann(ByteRange::new(start, end), scope.to_scope((expr, r#type)))
-    },
+    <start: @L> <expr: LetExpr> ":" <r#type: LetExpr> <end: @R> => builder.ann((start, end), expr, r#type),
     LetExpr => <>,
 }
 
 LetExpr: Expr<'arena> = {
-    <start: @L> "let" <def: LetDef> ";" <body: LetExpr> <end: @R> =>
-        Expr::Let(
-            ByteRange::new(start, end),
-            scope.to_scope((def, body)),
-        ),
+    <start: @L> "let" <def: LetDef> ";" <body: LetExpr> <end: @R> => builder.r#let((start, end), def, body),
     FunExpr => <>,
 }
 
@@ -75,24 +63,24 @@ LetDef: LetDef<'arena> = {
 }
 
 FunExpr: Expr<'arena> = {
-    <start: @L> <plicity: Plicity> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => Expr::Arrow(ByteRange::new(start, end), plicity, scope.to_scope((arg, body))),
-    <start: @L> "fun" <params: Param+> "->" <body: FunExpr> <end: @R> => Expr::FunType(ByteRange::new(start, end), scope.to_scope_from_iter(params), scope.to_scope(body)),
-    <start: @L> "fun" <params: Param+> "=>" <body: LetExpr> <end: @R> => Expr::FunLit(ByteRange::new(start, end), scope.to_scope_from_iter(params), scope.to_scope(body)),
+    <start: @L> <plicity: Plicity> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => builder.arrow((start, end), plicity, arg, body),
+    <start: @L> "fun" <params: Param+> "->" <body: FunExpr> <end: @R> => builder.fun_type((start, end), scope.to_scope_from_iter(params), body),
+    <start: @L> "fun" <params: Param+> "=>" <body: LetExpr> <end: @R> => builder.fun_lit((start, end), scope.to_scope_from_iter(params), body),
     AppExpr => <>,
 }
 
 AppExpr: Expr<'arena> = {
-    <start: @L> <fun: ProjExpr> <args: Arg+> <end: @R> => Expr::FunApp(ByteRange::new(start, end), scope.to_scope(fun), scope.to_scope_from_iter(args)),
+    <start: @L> <fun: ProjExpr> <args: Arg+> <end: @R> => builder.fun_app((start, end), fun, scope.to_scope_from_iter(args)),
     ProjExpr => <>,
 }
 
 ProjExpr: Expr<'arena> = {
-    <start: @L> <head: AtomExpr> <labels: ("." <RangeIdent>)+> <end: @R> => Expr::RecordProj(ByteRange::new(start, end), scope.to_scope(head), scope.to_scope_from_iter(labels)),
+    <start: @L> <head: AtomExpr> <labels: ("." <RangeIdent>)+> <end: @R> => builder.record_proj((start, end), head, scope.to_scope_from_iter(labels)),
     AtomExpr => <>,
 }
 
 AtomExpr: Expr<'arena> = {
-    <start: @L> "(" <expr: Expr> ")" <end: @R> => Expr::Paren(ByteRange::new(start, end), scope.to_scope(expr)),
+    <start: @L> "(" <expr: Expr> ")" <end: @R> => builder.paren((start, end), expr),
     <start: @L> <exprs: Tuple<Expr>> <end: @R> => Expr::TupleLit(ByteRange::new(start, end), exprs),
     <start: @L> <lit: Lit> <end: @R> => Expr::Lit(ByteRange::new(start, end), lit),
     <start: @L> "_" <end: @R> => Expr::Placeholder(ByteRange::new(start, end)),

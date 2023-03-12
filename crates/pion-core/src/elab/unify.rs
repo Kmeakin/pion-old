@@ -222,6 +222,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         }
     }
 
+    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.scope) }
+
     fn elim_env(&self) -> ElimEnv<'arena, '_> { ElimEnv::new(self.scope, self.meta_values) }
 
     /// Unify two values, updating the solution environment if necessary.
@@ -469,7 +471,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     fn fun_intros(&self, spine: &[Elim<'arena>], expr: Expr<'arena>) -> Expr<'arena> {
         spine.iter().fold(expr, |expr, elim| match elim {
             Elim::FunApp(plicity, ..) => {
-                Expr::FunLit(*plicity, None, self.scope.to_scope((Expr::Error, expr)))
+                self.expr_builder()
+                    .fun_lit(*plicity, None, Expr::Error, expr)
             }
             Elim::RecordProj(_) => {
                 unreachable!("should have been caught by `init_renaming`")
@@ -491,6 +494,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         value: &Value<'arena>,
     ) -> Result<Expr<'arena>, RenameError> {
         let value = self.elim_env().update_metas(value);
+        let expr_builder = self.expr_builder();
         match value {
             Value::Lit(lit) => Ok(Expr::Lit(lit)),
             Value::Stuck(head, spine) => {
@@ -509,30 +513,20 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                 (spine.iter()).try_fold(head, |head, elim| match elim {
                     Elim::FunApp(plicity, arg) => {
                         let arg = self.rename(meta_var, arg)?;
-                        Ok(Expr::FunApp(*plicity, self.scope.to_scope((head, arg))))
+                        Ok(expr_builder.fun_app(*plicity, head, arg))
                     }
-                    Elim::RecordProj(label) => {
-                        Ok(Expr::RecordProj(self.scope.to_scope(head), *label))
-                    }
+                    Elim::RecordProj(label) => Ok(expr_builder.record_proj(head, *label)),
                 })
             }
-            Value::FunType(plicity, name, domain, body) => {
+            Value::FunType(plicity, name, domain, codomain) => {
                 let domain = self.rename(meta_var, domain)?;
-                let body = self.rename_closure(meta_var, &body)?;
-                Ok(Expr::FunType(
-                    plicity,
-                    name,
-                    self.scope.to_scope((domain, body)),
-                ))
+                let codomain = self.rename_closure(meta_var, &codomain)?;
+                Ok(expr_builder.fun_type(plicity, name, domain, codomain))
             }
             Value::FunLit(plicity, name, domain, body) => {
                 let domain = self.rename(meta_var, domain)?;
                 let body = self.rename_closure(meta_var, &body)?;
-                Ok(Expr::FunLit(
-                    plicity,
-                    name,
-                    self.scope.to_scope((domain, body)),
-                ))
+                Ok(expr_builder.fun_lit(plicity, name, domain, body))
             }
             Value::RecordType(labels, telescope) => {
                 let types = self.rename_telescope(meta_var, telescope)?;

@@ -43,6 +43,10 @@ impl ByteRange {
     }
 }
 
+impl From<(BytePos, BytePos)> for ByteRange {
+    fn from((start, end): (BytePos, BytePos)) -> Self { Self::new(start, end) }
+}
+
 impl From<ByteRange> for Range<usize> {
     fn from(range: ByteRange) -> Self { (range.start.into())..(range.end.into()) }
 }

@@ -2,6 +2,7 @@ use std::ops::ControlFlow;
 
 use internal_iterator::InternalIterator;
 use pion_surface::syntax::{Plicity, Symbol};
+use scoped_arena::Scope;
 
 use crate::env::{EnvLen, Index, Level, UniqueEnv};
 use crate::prim::Prim;
@@ -241,5 +242,45 @@ impl<'a, 'arena> Subexprs<'a, 'arena> {
         }
 
         ControlFlow::Continue(())
+    }
+}
+
+pub struct ExprBuilder<'arena> {
+    scope: &'arena Scope<'arena>,
+}
+
+impl<'arena> ExprBuilder<'arena> {
+    pub fn new(scope: &'arena Scope<'arena>) -> Self { Self { scope } }
+
+    pub fn r#let(&self, def: LetDef<'arena>, body: Expr<'arena>) -> Expr<'arena> {
+        Expr::Let(self.scope.to_scope((def, body)))
+    }
+
+    pub fn fun_lit(
+        &self,
+        plicity: Plicity,
+        name: Option<Symbol>,
+        domain: Expr<'arena>,
+        body: Expr<'arena>,
+    ) -> Expr<'arena> {
+        Expr::FunLit(plicity, name, self.scope.to_scope((domain, body)))
+    }
+
+    pub fn fun_type(
+        &self,
+        plicity: Plicity,
+        name: Option<Symbol>,
+        domain: Expr<'arena>,
+        codomain: Expr<'arena>,
+    ) -> Expr<'arena> {
+        Expr::FunType(plicity, name, self.scope.to_scope((domain, codomain)))
+    }
+
+    pub fn fun_app(&self, plicity: Plicity, fun: Expr<'arena>, arg: Expr<'arena>) -> Expr<'arena> {
+        Expr::FunApp(plicity, self.scope.to_scope((fun, arg)))
+    }
+
+    pub fn record_proj(&self, head: Expr<'arena>, label: Symbol) -> Expr<'arena> {
+        Expr::RecordProj(self.scope.to_scope(head), label)
     }
 }

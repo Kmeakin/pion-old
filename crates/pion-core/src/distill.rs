@@ -36,6 +36,8 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
         }
     }
 
+    fn builder(&self) -> surface::Builder<'arena> { surface::Builder::new(self.scope) }
+
     fn local_len(&mut self) -> EnvLen { self.local_names.len() }
 
     fn truncate_local(&mut self, len: EnvLen) { self.local_names.truncate(len); }
@@ -76,13 +78,14 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
 
     fn paren(&self, wrap: bool, expr: surface::Expr<'arena, ()>) -> surface::Expr<'arena, ()> {
         if wrap {
-            surface::Expr::Paren((), self.scope.to_scope(expr))
+            self.builder().paren((), expr)
         } else {
             expr
         }
     }
 
     fn expr_prec(&mut self, prec: Prec, expr: &Expr<'_>) -> surface::Expr<'arena, ()> {
+        let builder = self.builder();
         match expr {
             Expr::Error => surface::Expr::Error(()),
             Expr::Local(var) => match self.local_names.get_index(*var) {
@@ -114,10 +117,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                             }
                         }),
                 );
-                self.paren(
-                    prec > Prec::App,
-                    surface::Expr::FunApp((), self.scope.to_scope(head), args),
-                )
+                self.paren(prec > Prec::App, builder.fun_app((), head, args))
             }
             Expr::Lit(literal) => surface::Expr::Lit((), lit(*literal)),
             Expr::Prim(primitive) => prim(*primitive),
@@ -126,10 +126,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let body = self.expr_prec(Prec::Let, body);
                 self.pop_local();
 
-                self.paren(
-                    prec > Prec::Let,
-                    surface::Expr::Let((), self.scope.to_scope((def, body))),
-                )
+                self.paren(prec > Prec::Let, builder.r#let((), def, body))
             }
             Expr::FunType(..) => {
                 let mut body = expr;
@@ -147,17 +144,13 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                         }
                         // Use arrow sugar if the parameter is not referenced in the body type.
                         Expr::FunType(plicity, _, (r#type, body)) => {
-                            let param = self.expr_prec(Prec::App, r#type);
+                            let domain = self.expr_prec(Prec::App, r#type);
 
                             self.push_local(None);
-                            let body = self.expr_prec(Prec::Fun, body);
+                            let codomain = self.expr_prec(Prec::Fun, body);
                             self.pop_local();
 
-                            break surface::Expr::Arrow(
-                                (),
-                                *plicity,
-                                self.scope.to_scope((param, body)),
-                            );
+                            break builder.arrow((), *plicity, domain, codomain);
                         }
                         _ => break self.expr_prec(Prec::Fun, body),
                     }
@@ -167,14 +160,8 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 if params.is_empty() {
                     self.paren(prec > Prec::Fun, body)
                 } else {
-                    self.paren(
-                        prec > Prec::Fun,
-                        surface::Expr::FunType(
-                            (),
-                            self.scope.to_scope_from_iter(params),
-                            self.scope.to_scope(body),
-                        ),
-                    )
+                    let params = self.scope.to_scope_from_iter(params);
+                    self.paren(prec > Prec::Fun, builder.fun_type((), params, body))
                 }
             }
             Expr::FunLit(..) => {
@@ -189,14 +176,8 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let body = self.expr_prec(Prec::Fun, body);
                 self.truncate_local(initial_len);
 
-                self.paren(
-                    prec > Prec::Fun,
-                    surface::Expr::FunLit(
-                        (),
-                        self.scope.to_scope_from_iter(params),
-                        self.scope.to_scope(body),
-                    ),
-                )
+                let params = self.scope.to_scope_from_iter(params);
+                self.paren(prec > Prec::Fun, builder.fun_lit((), params, body))
             }
             Expr::FunApp(..) => {
                 let mut args = Vec::new();
@@ -213,15 +194,8 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 }
 
                 let fun = self.expr_prec(Prec::Proj, fun);
-
-                self.paren(
-                    prec > Prec::App,
-                    surface::Expr::FunApp(
-                        (),
-                        self.scope.to_scope(fun),
-                        self.scope.to_scope_from_iter(args.into_iter().rev()),
-                    ),
-                )
+                let args = self.scope.to_scope_from_iter(args.into_iter().rev());
+                self.paren(prec > Prec::App, builder.fun_app((), fun, args))
             }
             Expr::RecordType(labels, types) if is_tuple_telescope(labels, types) => {
                 let scope = self.scope;
@@ -271,11 +245,8 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 }
 
                 let head = self.expr_prec(Prec::Atom, head);
-                surface::Expr::RecordProj(
-                    (),
-                    self.scope.to_scope(head),
-                    self.scope.to_scope_from_iter(labels.into_iter().rev()),
-                )
+                let labels = self.scope.to_scope_from_iter(labels.into_iter().rev());
+                builder.record_proj((), head, labels)
             }
         }
     }
