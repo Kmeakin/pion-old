@@ -36,6 +36,8 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
         }
     }
 
+    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.scope) }
+
     pub fn elab_expr(&mut self, expr: surface::Expr<'_>) -> (Expr<'arena>, Expr<'arena>) {
         let (expr, r#type) = self.synth(&expr);
         let r#type = self.quote_env().quote(&r#type);
@@ -85,7 +87,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
     }
 
     pub fn quote_env(&self) -> QuoteEnv<'arena, '_> {
-        QuoteEnv::new(self.elim_env(), self.local_env.values.len())
+        QuoteEnv::new(self.scope, self.elim_env(), self.local_env.values.len())
     }
 
     pub fn unifiy_ctx(&mut self) -> UnifyCtx<'arena, '_> {

@@ -23,7 +23,7 @@ pub enum Item<'arena, Extra = ByteRange> {
 pub struct Def<'arena, Extra = ByteRange> {
     pub extra: Extra,
     pub name: Symbol,
-    pub r#type: Option<&'arena Expr<'arena, Extra>>,
+    pub r#type: Option<Expr<'arena, Extra>>,
     pub expr: Expr<'arena, Extra>,
 }
 
@@ -99,7 +99,7 @@ impl<'arena> Expr<'arena, ByteRange> {
         input: &InputString,
     ) -> Self {
         let tokens = tokens::tokens(input);
-        match crate::grammar::ExprParser::new().parse(scope, errors, tokens) {
+        match crate::grammar::ExprParser::new().parse(Builder::new(scope), scope, errors, tokens) {
             Ok(expr) => expr,
             Err(err) => {
                 let err = SyntaxError::from_lalrpop(err);
@@ -269,6 +269,106 @@ impl SyntaxError {
             }
             LalrpopParseError::User { error } => Self::Lexer(error),
         }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct Builder<'arena> {
+    scope: &'arena Scope<'arena>,
+}
+
+impl<'arena> Builder<'arena> {
+    pub fn new(scope: &'arena Scope<'arena>) -> Self { Self { scope } }
+
+    pub fn def<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        name: Symbol,
+        r#type: impl Into<Option<Expr<'arena, Extra>>>,
+        expr: Expr<'arena, Extra>,
+    ) -> Def<'arena, Extra> {
+        Def {
+            extra: range.into(),
+            name,
+            r#type: r#type.into(),
+            expr,
+        }
+    }
+
+    pub fn paren<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        expr: Expr<'arena, Extra>,
+    ) -> Expr<'arena, Extra> {
+        Expr::Paren(range.into(), self.scope.to_scope(expr))
+    }
+
+    pub fn ann<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        expr: Expr<'arena, Extra>,
+        r#type: Expr<'arena, Extra>,
+    ) -> Expr<'arena, Extra> {
+        Expr::Ann(range.into(), self.scope.to_scope((expr, r#type)))
+    }
+
+    pub fn r#let<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        def: LetDef<'arena, Extra>,
+        body: Expr<'arena, Extra>,
+    ) -> Expr<'arena, Extra> {
+        Expr::Let(range.into(), self.scope.to_scope((def, body)))
+    }
+
+    pub fn arrow<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        plicity: Plicity,
+        domain: Expr<'arena, Extra>,
+        codomain: Expr<'arena, Extra>,
+    ) -> Expr<'arena, Extra> {
+        Expr::Arrow(
+            range.into(),
+            plicity,
+            self.scope.to_scope((domain, codomain)),
+        )
+    }
+
+    pub fn fun_type<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        params: &'arena [Param<'arena, Extra>],
+        codomain: Expr<'arena, Extra>,
+    ) -> Expr<'arena, Extra> {
+        Expr::FunType(range.into(), params, self.scope.to_scope(codomain))
+    }
+
+    pub fn fun_lit<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        params: &'arena [Param<'arena, Extra>],
+        body: Expr<'arena, Extra>,
+    ) -> Expr<'arena, Extra> {
+        Expr::FunLit(range.into(), params, self.scope.to_scope(body))
+    }
+
+    pub fn fun_app<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        fun: Expr<'arena, Extra>,
+        args: &'arena [Arg<'arena, Extra>],
+    ) -> Expr<'arena, Extra> {
+        Expr::FunApp(range.into(), self.scope.to_scope(fun), args)
+    }
+
+    pub fn record_proj<Extra>(
+        &self,
+        range: impl Into<Extra>,
+        head: Expr<'arena, Extra>,
+        labels: &'arena [(Extra, Symbol)],
+    ) -> Expr<'arena, Extra> {
+        Expr::RecordProj(range.into(), self.scope.to_scope(head), labels)
     }
 }
 

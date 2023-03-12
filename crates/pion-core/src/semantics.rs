@@ -6,23 +6,28 @@ use crate::env::{EnvLen, Index, Level, SliceEnv, UniqueEnv};
 use crate::syntax::*;
 
 pub struct EvalEnv<'arena, 'env> {
+    scope: &'arena Scope<'arena>,
     elim_env: ElimEnv<'arena, 'env>,
     local_values: &'env mut UniqueEnv<Value<'arena>>,
 }
 
 impl<'arena, 'env> EvalEnv<'arena, 'env> {
     pub fn new(
+        scope: &'arena Scope<'arena>,
         elim_env: ElimEnv<'arena, 'env>,
         local_values: &'env mut UniqueEnv<Value<'arena>>,
     ) -> Self {
         Self {
+            scope,
             elim_env,
             local_values,
         }
     }
 
+    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.scope) }
+
     fn quote_env(&self) -> QuoteEnv<'arena, 'env> {
-        QuoteEnv::new(self.elim_env, self.local_values.len())
+        QuoteEnv::new(self.scope, self.elim_env, self.local_values.len())
     }
 
     fn get_local<'this: 'env>(&'this self, var: Index) -> &'env Value<'arena> {
@@ -55,13 +60,13 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 body_value
             }
             Expr::FunType(plicity, name, (domain, codomain)) => {
-                let scope = self.elim_env.scope;
+                let scope = self.scope;
                 let domain_value = self.eval(domain);
                 let codomain = Closure::new(self.local_values.clone(), codomain);
                 Value::FunType(*plicity, *name, scope.to_scope(domain_value), codomain)
             }
             Expr::FunLit(plicity, name, (domain, body)) => {
-                let scope = self.elim_env.scope;
+                let scope = self.scope;
                 let type_value = self.eval(domain);
                 let body = Closure::new(self.local_values.clone(), body);
                 Value::FunLit(*plicity, *name, scope.to_scope(type_value), body)
@@ -76,7 +81,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 Value::RecordType(labels, telescope)
             }
             Expr::RecordLit(labels, exprs) => {
-                let scope = self.elim_env.scope;
+                let scope = self.scope;
                 let exprs = exprs.iter().map(|expr| self.eval(expr));
                 Value::RecordLit(labels, scope.to_scope_from_iter(exprs))
             }
@@ -88,6 +93,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
     }
 
     pub fn zonk(&mut self, expr: &Expr<'arena>) -> Expr<'arena> {
+        let expr_builder = self.expr_builder();
         match expr {
             Expr::Error => Expr::Error,
             Expr::Lit(lit) => Expr::Lit(*lit),
@@ -117,33 +123,25 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 (self.local_values).push(Value::local(self.local_values.len().to_level()));
                 let body = self.zonk(body);
                 self.local_values.pop();
-                Expr::Let(self.elim_env.scope.to_scope((def, body)))
+                expr_builder.r#let(def, body)
             }
-            Expr::FunType(plicity, name, (domain, body)) => {
+            Expr::FunType(plicity, name, (domain, codomain)) => {
                 let domain = self.zonk(domain);
                 (self.local_values).push(Value::local(self.local_values.len().to_level()));
-                let body = self.zonk(body);
+                let codomain = self.zonk(codomain);
                 self.local_values.pop();
-                Expr::FunType(
-                    *plicity,
-                    *name,
-                    self.elim_env.scope.to_scope((domain, body)),
-                )
+                expr_builder.fun_type(*plicity, *name, domain, codomain)
             }
             Expr::FunLit(plicity, name, (domain, body)) => {
                 let domain = self.zonk(domain);
                 (self.local_values).push(Value::local(self.local_values.len().to_level()));
                 let body = self.zonk(body);
                 self.local_values.pop();
-                Expr::FunLit(
-                    *plicity,
-                    *name,
-                    self.elim_env.scope.to_scope((domain, body)),
-                )
+                expr_builder.fun_lit(*plicity, *name, domain, body)
             }
             Expr::RecordType(labels, types) => {
                 let len = self.local_values.len();
-                let types = (self.elim_env.scope).to_scope_from_iter(types.iter().map(|r#type| {
+                let types = (self.scope).to_scope_from_iter(types.iter().map(|r#type| {
                     let r#type = self.zonk(r#type);
                     let var = Value::local(self.local_values.len().to_level());
                     self.local_values.push(var);
@@ -166,6 +164,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
         &mut self,
         expr: &Expr<'arena>,
     ) -> Either<Expr<'arena>, Value<'arena>> {
+        let expr_builder = self.expr_builder();
         match expr {
             Expr::Meta(var) => match self.elim_env.get_meta(*var) {
                 None => Left(Expr::Meta(*var)),
@@ -178,10 +177,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
             Expr::FunApp(plicity, (fun, arg)) => match self.zonk_meta_var_spines(fun) {
                 Left(fun) => {
                     let arg = self.zonk(arg);
-                    Left(Expr::FunApp(
-                        *plicity,
-                        self.elim_env.scope.to_scope((fun, arg)),
-                    ))
+                    Left(expr_builder.fun_app(*plicity, fun, arg))
                 }
                 Right(fun_value) => {
                     let arg_value = self.eval(arg);
@@ -189,7 +185,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 }
             },
             Expr::RecordProj(head, label) => match self.zonk_meta_var_spines(head) {
-                Left(head) => Left(Expr::RecordProj(self.elim_env.scope.to_scope(head), *label)),
+                Left(head) => Left(expr_builder.record_proj(head, *label)),
                 Right(head_value) => Right(self.elim_env.record_proj(head_value, *label)),
             },
             expr => Left(self.zonk(expr)),
@@ -239,7 +235,7 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
         &self,
         local_values: &'env mut UniqueEnv<Value<'arena>>,
     ) -> EvalEnv<'arena, 'env> {
-        EvalEnv::new(*self, local_values)
+        EvalEnv::new(self.scope, *self, local_values)
     }
 
     /// Bring a value up-to-date with any new unification solutions that
@@ -326,51 +322,56 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
 /// This environment keeps track of the length of the local environment,
 /// and the values of metavariables, allowing for quotation.
 pub struct QuoteEnv<'arena, 'env> {
+    scope: &'arena Scope<'arena>,
     elim_env: ElimEnv<'arena, 'env>,
     local_env: EnvLen,
 }
 
 impl<'arena, 'env> QuoteEnv<'arena, 'env> {
-    pub fn new(elim_env: ElimEnv<'arena, 'env>, local_values: EnvLen) -> Self {
+    pub fn new(
+        scope: &'arena Scope<'arena>,
+        elim_env: ElimEnv<'arena, 'env>,
+        local_env: EnvLen,
+    ) -> Self {
         Self {
+            scope,
             elim_env,
-            local_env: local_values,
+            local_env,
         }
     }
+
+    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.scope) }
 
     /// Quote a [value][Value] back into a [expr][Expr].
     pub fn quote(&mut self, value: &Value) -> Expr<'arena> {
         let value = self.elim_env.update_metas(value);
+        let expr_builder = self.expr_builder();
         match value {
             Value::Lit(lit) => Expr::Lit(lit),
             Value::Stuck(head, spine) => {
-                let scope = self.elim_env.scope;
                 (spine.iter()).fold(self.quote_head(head), |head, elim| match elim {
                     Elim::FunApp(plicity, arg) => {
-                        Expr::FunApp(*plicity, scope.to_scope((head, self.quote(arg))))
+                        expr_builder.fun_app(*plicity, head, self.quote(arg))
                     }
-                    Elim::RecordProj(label) => Expr::RecordProj(scope.to_scope(head), *label),
+                    Elim::RecordProj(label) => expr_builder.record_proj(head, *label),
                 })
             }
             Value::FunType(plicity, name, domain, codomain) => {
-                let scope = self.elim_env.scope;
                 let domain = self.quote(domain);
                 let codomain = self.quote_closure(&codomain);
-                Expr::FunType(plicity, name, scope.to_scope((domain, codomain)))
+                expr_builder.fun_type(plicity, name, domain, codomain)
             }
             Value::FunLit(plicity, name, domain, body) => {
-                let scope = self.elim_env.scope;
                 let domain = self.quote(domain);
                 let body = self.quote_closure(&body);
-                Expr::FunType(plicity, name, scope.to_scope((domain, body)))
+                expr_builder.fun_lit(plicity, name, domain, body)
             }
             Value::RecordType(labels, telescope) => {
-                let scope = self.elim_env.scope;
                 let types = self.quote_telescope(telescope);
-                Expr::RecordType(scope.to_scope_from_iter(labels.iter().copied()), types)
+                Expr::RecordType(self.scope.to_scope_from_iter(labels.iter().copied()), types)
             }
             Value::RecordLit(labels, values) => {
-                let scope = self.elim_env.scope;
+                let scope = self.scope;
                 let values = values.iter().map(|value| self.quote(value));
                 Expr::RecordLit(
                     scope.to_scope_from_iter(labels.iter().copied()),
@@ -423,7 +424,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
         }
 
         self.local_env.truncate(initial_local_len);
-        self.elim_env.scope.to_scope_from_iter(exprs)
+        self.scope.to_scope_from_iter(exprs)
     }
 
     fn push_local(&mut self) { self.local_env.push(); }
