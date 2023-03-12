@@ -1,6 +1,6 @@
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use pion_source::location::ByteRange;
-use pion_surface::syntax::Symbol;
+use pion_surface::syntax::{Plicity, Symbol};
 
 use crate::elab::unify::{RenameError, SpineError, UnifyError};
 use crate::elab::MetaSource;
@@ -10,6 +10,13 @@ pub enum ElabError {
     UnboundName {
         range: ByteRange,
         name: Symbol,
+    },
+    FunAppPlicity {
+        fun_range: ByteRange,
+        fun_type: String,
+        fun_plicity: Plicity,
+        arg_range: ByteRange,
+        arg_plicity: Plicity,
     },
     FunAppNotFun {
         fun_range: ByteRange,
@@ -62,6 +69,22 @@ impl ElabError {
             Self::UnboundName { range, name } => Diagnostic::error()
                 .with_message(format!("cannot find `{name}` in scope"))
                 .with_labels(vec![primary_label(range)]),
+            Self::FunAppPlicity {
+                fun_range,
+                fun_type,
+                fun_plicity,
+                arg_range,
+                arg_plicity,
+            } => Diagnostic::error()
+                .with_message(format!(
+                    "tried to apply {arg_plicity} argument where {fun_plicity} argument was \
+                     expected"
+                ))
+                .with_labels(vec![
+                    primary_label(arg_range).with_message(format!("{arg_plicity} argument")),
+                    secondary_label(fun_range)
+                        .with_message(format!("{fun_plicity} function of type `{fun_type}`")),
+                ]),
             Self::FunAppNotFun {
                 fun_range,
                 fun_type,
@@ -181,6 +204,7 @@ impl ElabError {
                     MetaSource::PlaceholderExpr(range) => (range, "placeholder expression"),
                     MetaSource::HoleExpr(range, _) => (range, "hole expression"),
                     MetaSource::PatType(range) => (range, "pattern type"),
+                    MetaSource::ImplicitArg(range, _) => (range, "implicit argument"),
 
                     // should be impossible
                     MetaSource::HoleType(range, _) => (range, "hole type"),

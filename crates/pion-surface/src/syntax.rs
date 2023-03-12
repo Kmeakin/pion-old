@@ -1,3 +1,5 @@
+use core::fmt;
+
 pub use pion_source::input::InputString;
 use pion_source::location::{BytePos, ByteRange};
 use scoped_arena::Scope;
@@ -134,6 +136,15 @@ where
 pub enum Plicity {
     Explicit,
     Implicit,
+}
+
+impl fmt::Display for Plicity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Explicit => f.write_str("explicit"),
+            Self::Implicit => f.write_str("implicit"),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

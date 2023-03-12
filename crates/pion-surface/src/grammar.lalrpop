@@ -113,7 +113,7 @@ ExprField: ExprField<'arena> = {
 
 Param: Param<'arena> = {
     <plicity: Plicity> <pat: Pat> => Param {plicity, pat, r#type: None},
-    <plicity: Plicity> "(" <pat: Pat> <r#type: Ann> ")" => Param {plicity, pat, r#type: Some(r#type)},
+    "("<plicity: Plicity> <pat: Pat> <r#type: Ann> ")" => Param {plicity, pat, r#type: Some(r#type)},
 }
 
 Arg: Arg<'arena> = {

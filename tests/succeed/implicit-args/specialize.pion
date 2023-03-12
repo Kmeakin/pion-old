@@ -1,0 +1,20 @@
+//~ run = "${PION} elab ${FILE}"
+
+let id = fun (@A : Type) (a : A) => a;
+let always = fun (@A : Type) (@B : Type) (a : A) (b : B) => a;
+let apply = fun (@A : Type) (@B : Type) (f : A -> B) (x : A) => f x;
+
+// No specialization
+let _ = id;
+let _ = always;
+let _ = apply;
+
+// Full specialization
+let _ : Bool -> Bool = id;
+let _ : Bool -> Int -> Bool = always;
+let _ : (Bool -> Int) -> Bool -> Int = apply;
+
+// Specialization of higher order functions
+let _ = apply (always false) (0 : Int);
+
+{}
