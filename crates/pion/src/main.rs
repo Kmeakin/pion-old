@@ -58,7 +58,6 @@ fn main() {
                 driver.emit_diagnostic(error.to_diagnostic(file_id));
             });
             let (expr, r#type) = elab_ctx.elab_expr(expr);
-            let r#type = elab_ctx.quote_env().quote(&r#type);
 
             let mut distill_ctx = elab_ctx.distill_ctx();
             let expr = distill_ctx.expr(&expr);

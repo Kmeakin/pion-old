@@ -42,9 +42,7 @@ impl PartialRenaming {
         self.target.clear();
     }
 
-    fn next_local_var<'arena>(&self) -> Value<'arena> {
-        Value::local(self.source.len().next_level())
-    }
+    fn next_local_var<'arena>(&self) -> Value<'arena> { Value::local(self.source.len().to_level()) }
 
     /// Set a local source variable to local target variable mapping, ensuring
     /// that the variable appears uniquely.
@@ -57,7 +55,7 @@ impl PartialRenaming {
         let is_unique = self.get_as_level(source_var).is_none();
 
         if is_unique {
-            let target_var = Some(self.target.next_level());
+            let target_var = Some(self.target.to_level());
             self.source.set_level(source_var, target_var);
             self.target.push();
         }
@@ -67,7 +65,7 @@ impl PartialRenaming {
 
     /// Push an extra local binding onto the renaming.
     fn push_local(&mut self) {
-        let target_var = self.target.next_level();
+        let target_var = self.target.to_level();
         self.source.push(Some(target_var));
         self.target.push();
     }
@@ -319,7 +317,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         closure1: &Closure<'arena>,
         closure2: &Closure<'arena>,
     ) -> Result<(), UnifyError> {
-        let var = Value::local(self.local_env.next_level());
+        let var = Value::local(self.local_env.to_level());
 
         let value1 = self.elim_env().apply_closure(closure1.clone(), var.clone());
         let value2 = self.elim_env().apply_closure(closure2.clone(), var.clone());
@@ -354,7 +352,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                 return Err(error);
             }
 
-            let var = Value::local(self.local_env.next_level());
+            let var = Value::local(self.local_env.to_level());
             telescope1 = cont1(var.clone());
             telescope2 = cont2(var);
             self.local_env.push();
@@ -374,7 +372,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         body: &Closure<'arena>,
         value: &Value<'arena>,
     ) -> Result<(), UnifyError> {
-        let var = Value::local(self.local_env.next_level());
+        let var = Value::local(self.local_env.to_level());
         let value1 = self.elim_env().apply_closure(body.clone(), var.clone());
         let value2 = self.elim_env().fun_app(value.clone(), var.clone());
 

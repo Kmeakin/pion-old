@@ -36,8 +36,13 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
         }
     }
 
-    pub fn elab_expr(&mut self, expr: surface::Expr<'_>) -> (Expr<'arena>, Value<'arena>) {
+    pub fn elab_expr(&mut self, expr: surface::Expr<'_>) -> (Expr<'arena>, Expr<'arena>) {
         let (expr, r#type) = self.synth(&expr);
+        let r#type = self.quote_env().quote(&r#type);
+
+        let expr = self.eval_env().zonk(&expr);
+        let r#type = self.eval_env().zonk(&r#type);
+
         self.report_unsolved_metas();
         (expr, r#type)
     }
@@ -192,7 +197,7 @@ impl<'arena> LocalEnv<'arena> {
         self.values.truncate(len);
     }
 
-    fn next_var(&self) -> Value<'arena> { Value::local(self.values.len().next_level()) }
+    fn next_var(&self) -> Value<'arena> { Value::local(self.values.len().to_level()) }
 
     fn lookup(&self, name: Symbol) -> Option<(Index, &Type<'arena>)> {
         let local_var = self.names.index_of_elem(&Some(name))?;
@@ -224,7 +229,7 @@ struct MetaEnv<'arena> {
 impl<'arena> MetaEnv<'arena> {
     /// Push an unsolved metavariable onto the environment.
     fn push(&mut self, source: MetaSource, r#type: Value<'arena>) -> Level {
-        let level = self.types.len().next_level();
+        let level = self.types.len().to_level();
 
         self.sources.push(source);
         self.types.push(r#type);

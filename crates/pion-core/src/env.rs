@@ -20,7 +20,7 @@ impl EnvLen {
     }
 
     /// The next `Level` that will be bound in this environment.
-    pub fn next_level(self) -> Level { Level(self.0) }
+    pub fn to_level(self) -> Level { Level(self.0) }
 
     /// Push an element onto the environment.
     pub fn push(&mut self) { self.0 += 1; }

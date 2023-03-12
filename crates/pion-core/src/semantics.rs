@@ -1,3 +1,4 @@
+use either::*;
 use pion_surface::syntax::Symbol;
 use scoped_arena::Scope;
 
@@ -18,6 +19,10 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
             elim_env,
             local_values,
         }
+    }
+
+    fn quote_env(&self) -> QuoteEnv<'arena, 'env> {
+        QuoteEnv::new(self.elim_env, self.local_values.len())
     }
 
     fn get_local<'this: 'env>(&'this self, var: Index) -> &'env Value<'arena> {
@@ -79,6 +84,104 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 let head = self.eval(head);
                 self.elim_env.record_proj(head, *label)
             }
+        }
+    }
+
+    pub fn zonk(&mut self, expr: &Expr<'arena>) -> Expr<'arena> {
+        match expr {
+            Expr::Error => Expr::Error,
+            Expr::Lit(lit) => Expr::Lit(*lit),
+            Expr::Prim(prim) => Expr::Prim(*prim),
+            Expr::Local(var) => Expr::Local(*var),
+            Expr::InsertedMeta(var, infos) => match self.elim_env.get_meta(*var) {
+                None => Expr::InsertedMeta(*var, infos),
+                Some(value) => {
+                    let value = self.apply_binder_infos(value.clone(), infos);
+                    self.quote_env().quote(&value)
+                }
+            },
+            // These exprs might be elimination spines with metavariables at
+            // their head that need to be unfolded.
+            Expr::Meta(..) | Expr::FunApp(..) | Expr::RecordProj(..) => {
+                match self.zonk_meta_var_spines(expr) {
+                    Left(expr) => expr,
+                    Right(value) => self.quote_env().quote(&value),
+                }
+            }
+            Expr::Let((def, body)) => {
+                let def = LetDef {
+                    name: def.name,
+                    r#type: self.zonk(&def.r#type),
+                    expr: self.zonk(&def.expr),
+                };
+                (self.local_values).push(Value::local(self.local_values.len().to_level()));
+                let body = self.zonk(body);
+                self.local_values.pop();
+                Expr::Let(self.elim_env.scope.to_scope((def, body)))
+            }
+            Expr::FunType(name, (domain, body)) => {
+                let domain = self.zonk(domain);
+                (self.local_values).push(Value::local(self.local_values.len().to_level()));
+                let body = self.zonk(body);
+                self.local_values.pop();
+                Expr::FunType(*name, self.elim_env.scope.to_scope((domain, body)))
+            }
+            Expr::FunLit(name, (domain, body)) => {
+                let domain = self.zonk(domain);
+                (self.local_values).push(Value::local(self.local_values.len().to_level()));
+                let body = self.zonk(body);
+                self.local_values.pop();
+                Expr::FunLit(*name, self.elim_env.scope.to_scope((domain, body)))
+            }
+            Expr::RecordType(labels, types) => {
+                let len = self.local_values.len();
+                let types = (self.elim_env.scope).to_scope_from_iter(types.iter().map(|r#type| {
+                    let r#type = self.zonk(r#type);
+                    let var = Value::local(self.local_values.len().to_level());
+                    self.local_values.push(var);
+                    r#type
+                }));
+                self.local_values.truncate(len);
+                Expr::RecordType(labels, types)
+            }
+            Expr::RecordLit(labels, exprs) => Expr::RecordLit(
+                labels,
+                self.elim_env
+                    .scope
+                    .to_scope_from_iter(exprs.iter().map(|expr| self.zonk(expr))),
+            ),
+        }
+    }
+
+    /// Unfold elimination spines with solved metavariables at their head.
+    pub fn zonk_meta_var_spines(
+        &mut self,
+        expr: &Expr<'arena>,
+    ) -> Either<Expr<'arena>, Value<'arena>> {
+        match expr {
+            Expr::Meta(var) => match self.elim_env.get_meta(*var) {
+                None => Left(Expr::Meta(*var)),
+                Some(value) => Right(value.clone()),
+            },
+            Expr::InsertedMeta(var, infos) => match self.elim_env.get_meta(*var) {
+                None => Left(Expr::InsertedMeta(*var, infos)),
+                Some(value) => Right(self.apply_binder_infos(value.clone(), infos)),
+            },
+            Expr::FunApp((fun, arg)) => match self.zonk_meta_var_spines(fun) {
+                Left(fun) => {
+                    let arg = self.zonk(arg);
+                    Left(Expr::FunApp(self.elim_env.scope.to_scope((fun, arg))))
+                }
+                Right(fun_value) => {
+                    let arg_value = self.eval(arg);
+                    Right(self.elim_env.fun_app(fun_value, arg_value))
+                }
+            },
+            Expr::RecordProj(head, label) => match self.zonk_meta_var_spines(head) {
+                Left(head) => Left(Expr::RecordProj(self.elim_env.scope.to_scope(head), *label)),
+                Right(head_value) => Right(self.elim_env.record_proj(head_value, *label)),
+            },
+            expr => Left(self.zonk(expr)),
         }
     }
 
@@ -276,7 +379,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
 
     /// Quote a [closure][Closure] back into an [expr][Expr].
     fn quote_closure(&mut self, closure: &Closure) -> Expr<'arena> {
-        let arg = Value::local(self.local_env.next_level());
+        let arg = Value::local(self.local_env.to_level());
         let value = self.elim_env.apply_closure(closure.clone(), arg);
 
         self.push_local();
@@ -293,7 +396,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
         let mut exprs = Vec::with_capacity(telescope.len());
 
         while let Some((value, cont)) = self.elim_env.split_telescope(telescope) {
-            let var = Value::local(self.local_env.next_level());
+            let var = Value::local(self.local_env.to_level());
             telescope = cont(var);
             exprs.push(self.quote(&value));
             self.local_env.push();
