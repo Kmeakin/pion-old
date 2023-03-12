@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use internal_iterator::InternalIterator;
-use pion_surface::syntax::Symbol;
+use pion_surface::syntax::{Plicity, Symbol};
 
 use crate::env::{EnvLen, Index, Level, UniqueEnv};
 use crate::prim::Prim;
@@ -15,9 +15,9 @@ pub enum Expr<'arena> {
     Meta(Level),
     InsertedMeta(Level, &'arena [BinderInfo]),
     Let(&'arena (LetDef<'arena>, Self)),
-    FunType(Option<Symbol>, &'arena (Self, Self)),
-    FunLit(Option<Symbol>, &'arena (Self, Self)),
-    FunApp(&'arena (Self, Self)),
+    FunType(Plicity, Option<Symbol>, &'arena (Self, Self)),
+    FunLit(Plicity, Option<Symbol>, &'arena (Self, Self)),
+    FunApp(Plicity, &'arena (Self, Self)),
     RecordType(&'arena [Symbol], &'arena [Self]),
     RecordLit(&'arena [Symbol], &'arena [Self]),
     RecordProj(&'arena Self, Symbol),
@@ -53,8 +53,8 @@ pub type Type<'arena> = Value<'arena>;
 pub enum Value<'arena> {
     Lit(Lit),
     Stuck(Head, Vec<Elim<'arena>>),
-    FunType(Option<Symbol>, &'arena Self, Closure<'arena>),
-    FunLit(Option<Symbol>, &'arena Self, Closure<'arena>),
+    FunType(Plicity, Option<Symbol>, &'arena Self, Closure<'arena>),
+    FunLit(Plicity, Option<Symbol>, &'arena Self, Closure<'arena>),
     RecordType(&'arena [Symbol], Telescope<'arena>),
     RecordLit(&'arena [Symbol], &'arena [Self]),
 }
@@ -89,7 +89,7 @@ pub enum Head {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Elim<'arena> {
-    FunApp(Value<'arena>),
+    FunApp(Plicity, Value<'arena>),
     RecordProj(Symbol),
 }
 
@@ -214,13 +214,13 @@ impl<'a, 'arena> Subexprs<'a, 'arena> {
                 self.helper(body, f)?;
                 self.env.pop();
             }
-            Expr::FunType(_, (r#type, body)) | Expr::FunLit(_, (r#type, body)) => {
+            Expr::FunType(.., (r#type, body)) | Expr::FunLit(.., (r#type, body)) => {
                 self.helper(r#type, f)?;
                 self.env.push();
                 self.helper(body, f)?;
                 self.env.pop();
             }
-            Expr::FunApp((fun, arg)) => {
+            Expr::FunApp(_, (fun, arg)) => {
                 self.helper(fun, f)?;
                 self.helper(arg, f)?;
             }

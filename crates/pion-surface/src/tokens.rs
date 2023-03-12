@@ -38,6 +38,7 @@ pub enum Token<'src> {
     #[token(")")]  RParen,
     #[token("{")]  LCurly,
     #[token("}")]  RCurly,
+    #[token("@")]  At,
     #[token("=")]  Eq,
     #[token("=>")] FatArrow,
 }
@@ -65,6 +66,7 @@ impl<'src> Token<'src> {
             Token::RParen => "`)`",
             Token::LCurly => "`{`",
             Token::RCurly => "`}`",
+            Token::At => "`@`",
             Token::Eq => "`=`",
             Token::FatArrow => "`=>`",
         }

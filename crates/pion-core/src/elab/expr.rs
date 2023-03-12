@@ -59,7 +59,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 self.local_env.pop();
                 (Expr::Let(self.scope.to_scope((def, body_expr))), body_type)
             }
-            surface::Expr::Arrow(_, (domain, codomain)) => {
+            surface::Expr::Arrow(_, plicity, (domain, codomain)) => {
                 let domain = self.check(domain, &Type::TYPE);
                 let domain_value = self.eval_env().eval(&domain);
 
@@ -67,7 +67,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let codomain = self.check(codomain, &Type::TYPE);
                 self.local_env.pop();
 
-                let expr = Expr::FunType(None, self.scope.to_scope((domain, codomain)));
+                let expr = Expr::FunType(*plicity, None, self.scope.to_scope((domain, codomain)));
                 (expr, Type::TYPE)
             }
             surface::Expr::FunType(_, params, body) => {
@@ -88,11 +88,11 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 for (arity, arg) in args.iter().enumerate() {
                     r#type = self.elim_env().update_metas(&r#type);
                     match r#type {
-                        Value::FunType(_, domain, codomain) => {
-                            let arg_expr = self.check(arg, domain);
+                        Value::FunType(plicity, _, domain, codomain) => {
+                            let arg_expr = self.check(&arg.expr, domain);
                             let arg_value = self.eval_env().eval(&arg_expr);
 
-                            expr = Expr::FunApp(self.scope.to_scope((expr, arg_expr)));
+                            expr = Expr::FunApp(plicity, self.scope.to_scope((expr, arg_expr)));
                             r#type = self.elim_env().apply_closure(codomain, arg_value);
                         }
                         _ if expr.is_error() || r#type.is_error() => return synth_error_expr(),
@@ -311,7 +311,11 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let (body_expr, _) = self.synth_fun_type(params, body);
                 self.local_env.pop();
 
-                let expr = Expr::FunType(name, self.scope.to_scope((param_type_expr, body_expr)));
+                let expr = Expr::FunType(
+                    param.plicity,
+                    name,
+                    self.scope.to_scope((param_type_expr, body_expr)),
+                );
                 let r#type = Value::TYPE;
                 (expr, r#type)
             }
@@ -335,8 +339,13 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let body_type_expr = self.quote_env().quote(&body_type);
                 self.local_env.pop();
 
-                let expr = Expr::FunLit(name, self.scope.to_scope((param_type_expr, body_expr)));
+                let expr = Expr::FunLit(
+                    param.plicity,
+                    name,
+                    self.scope.to_scope((param_type_expr, body_expr)),
+                );
                 let r#type = Value::FunType(
+                    param.plicity,
                     name,
                     self.scope.to_scope(param_type),
                     Closure::new(
@@ -361,7 +370,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             Some((param, next_params)) => {
                 let expected = self.elim_env().update_metas(expected);
                 match expected {
-                    Value::FunType(_, domain, codomain) => {
+                    Value::FunType(plicity, _, domain, codomain) => {
                         let pat = self.check_ann_pat(&param.pat, &param.r#type, domain);
                         let param_type_expr = self.quote_env().quote(domain);
                         let name = pat.name();
@@ -372,7 +381,11 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                         let body_expr = self.check_fun_lit(range, next_params, body, &body_type);
                         self.local_env.pop();
 
-                        Expr::FunLit(name, self.scope.to_scope((param_type_expr, body_expr)))
+                        Expr::FunLit(
+                            plicity,
+                            name,
+                            self.scope.to_scope((param_type_expr, body_expr)),
+                        )
                     }
                     _ if expected.is_error() => Expr::Error,
                     _ => {

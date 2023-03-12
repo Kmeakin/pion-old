@@ -37,6 +37,7 @@ extern {
         ")" => Token::RParen,
         "{" => Token::LCurly,
         "}" => Token::RCurly,
+        "@" => Token::At,
         "=" => Token::Eq,
         "=>" => Token::FatArrow,
     }
@@ -74,14 +75,14 @@ LetDef: LetDef<'arena> = {
 }
 
 FunExpr: Expr<'arena> = {
-    <start: @L> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => Expr::Arrow(ByteRange::new(start, end), scope.to_scope((arg, body))),
+    <start: @L> <plicity: Plicity> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => Expr::Arrow(ByteRange::new(start, end), plicity, scope.to_scope((arg, body))),
     <start: @L> "fun" <params: Param+> "->" <body: FunExpr> <end: @R> => Expr::FunType(ByteRange::new(start, end), scope.to_scope_from_iter(params), scope.to_scope(body)),
     <start: @L> "fun" <params: Param+> "=>" <body: LetExpr> <end: @R> => Expr::FunLit(ByteRange::new(start, end), scope.to_scope_from_iter(params), scope.to_scope(body)),
     AppExpr => <>,
 }
 
 AppExpr: Expr<'arena> = {
-    <start: @L> <fun: ProjExpr> <args: ProjExpr+> <end: @R> => Expr::FunApp(ByteRange::new(start, end), scope.to_scope(fun), scope.to_scope_from_iter(args)),
+    <start: @L> <fun: ProjExpr> <args: Arg+> <end: @R> => Expr::FunApp(ByteRange::new(start, end), scope.to_scope(fun), scope.to_scope_from_iter(args)),
     ProjExpr => <>,
 }
 
@@ -111,8 +112,18 @@ ExprField: ExprField<'arena> = {
 }
 
 Param: Param<'arena> = {
-    <pat: Pat> => Param {pat, r#type: None},
-    "(" <pat: Pat> <r#type: Ann> ")" => Param {pat, r#type: Some(r#type)},
+    <plicity: Plicity> <pat: Pat> => Param {plicity, pat, r#type: None},
+    <plicity: Plicity> "(" <pat: Pat> <r#type: Ann> ")" => Param {plicity, pat, r#type: Some(r#type)},
+}
+
+Arg: Arg<'arena> = {
+    <start: @L> <plicity: Plicity> <expr: ProjExpr> <end: @R> => Arg {extra: ByteRange::new(start, end), plicity, expr},
+}
+
+#[inline]
+Plicity: Plicity = {
+    () =>  Plicity::Explicit,
+    "@" => Plicity::Implicit,
 }
 
 pub Pat: Pat<'arena> = {

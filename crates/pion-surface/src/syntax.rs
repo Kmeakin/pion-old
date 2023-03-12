@@ -35,10 +35,10 @@ pub enum Expr<'arena, Extra = ByteRange> {
     Hole(Extra, Symbol),
     Ident(Extra, Symbol),
     Let(Extra, &'arena (LetDef<'arena, Extra>, Self)),
-    Arrow(Extra, &'arena (Self, Self)),
+    Arrow(Extra, Plicity, &'arena (Self, Self)),
     FunType(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunLit(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
-    FunApp(Extra, &'arena Self, &'arena [Self]),
+    FunApp(Extra, &'arena Self, &'arena [Arg<'arena, Extra>]),
     RecordType(Extra, &'arena [TypeField<'arena, Extra>]),
     RecordLit(Extra, &'arena [ExprField<'arena, Extra>]),
     TupleLit(Extra, &'arena [Self]),
@@ -111,8 +111,29 @@ impl<'arena> Expr<'arena, ByteRange> {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Param<'arena, Extra = ByteRange> {
+    pub plicity: Plicity,
     pub pat: Pat<'arena, Extra>,
     pub r#type: Option<Expr<'arena, Extra>>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Arg<'arena, Extra = ByteRange> {
+    pub extra: Extra,
+    pub plicity: Plicity,
+    pub expr: Expr<'arena, Extra>,
+}
+
+impl<'arena, Extra> Arg<'arena, Extra>
+where
+    Extra: Clone,
+{
+    pub fn range(&self) -> Extra { self.extra.clone() }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Plicity {
+    Explicit,
+    Implicit,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

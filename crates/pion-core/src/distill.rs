@@ -1,4 +1,4 @@
-use pion_surface::syntax::{self as surface, ExprField, Symbol, TypeField};
+use pion_surface::syntax::{self as surface, Arg, ExprField, Plicity, Symbol, TypeField};
 use scoped_arena::Scope;
 
 use crate::elab::MetaSource;
@@ -44,8 +44,14 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
 
     fn pop_local(&mut self) { self.local_names.pop(); }
 
-    fn param(&mut self, name: Option<Symbol>, r#type: &Expr<'_>) -> surface::Param<'arena, ()> {
+    fn param(
+        &mut self,
+        plicity: Plicity,
+        name: Option<Symbol>,
+        r#type: &Expr<'_>,
+    ) -> surface::Param<'arena, ()> {
         let param = surface::Param {
+            plicity,
             pat: name_to_pat(name),
             r#type: Some(self.expr_prec(Prec::Top, r#type)),
         };
@@ -100,7 +106,12 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                         })
                         .map(|var| {
                             let var = self.local_len().level_to_index(var).unwrap();
-                            self.expr_prec(Prec::Top, &Expr::Local(var))
+                            let expr = self.expr_prec(Prec::Top, &Expr::Local(var));
+                            Arg {
+                                extra: (),
+                                plicity: Plicity::Explicit,
+                                expr,
+                            }
                         }),
                 );
                 self.paren(
@@ -128,21 +139,25 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let body = loop {
                     match body {
                         // Use an explicit parameter if it is referenced in the body
-                        Expr::FunType(name, (r#type, next_body))
+                        Expr::FunType(plicity, name, (r#type, next_body))
                             if next_body.binds_local(EnvLen::default()) =>
                         {
-                            params.push(self.param(*name, r#type));
+                            params.push(self.param(*plicity, *name, r#type));
                             body = next_body;
                         }
                         // Use arrow sugar if the parameter is not referenced in the body type.
-                        Expr::FunType(_, (r#type, body)) => {
+                        Expr::FunType(plicity, _, (r#type, body)) => {
                             let param = self.expr_prec(Prec::App, r#type);
 
                             self.push_local(None);
                             let body = self.expr_prec(Prec::Fun, body);
                             self.pop_local();
 
-                            break surface::Expr::Arrow((), self.scope.to_scope((param, body)));
+                            break surface::Expr::Arrow(
+                                (),
+                                *plicity,
+                                self.scope.to_scope((param, body)),
+                            );
                         }
                         _ => break self.expr_prec(Prec::Fun, body),
                     }
@@ -167,8 +182,8 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let mut params = Vec::new();
 
                 let initial_len = self.local_len();
-                while let Expr::FunLit(name, (r#type, next_body)) = body {
-                    params.push(self.param(*name, r#type));
+                while let Expr::FunLit(plicity, name, (r#type, next_body)) = body {
+                    params.push(self.param(*plicity, *name, r#type));
                     body = next_body;
                 }
                 let body = self.expr_prec(Prec::Fun, body);
@@ -187,9 +202,14 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let mut args = Vec::new();
                 let mut fun = expr;
 
-                while let Expr::FunApp((next_fun, arg)) = fun {
+                while let Expr::FunApp(plicity, (next_fun, arg)) = fun {
                     fun = next_fun;
-                    args.push(self.expr_prec(Prec::Proj, arg));
+                    let expr = self.expr_prec(Prec::Proj, arg);
+                    args.push(Arg {
+                        extra: (),
+                        plicity: *plicity,
+                        expr,
+                    });
                 }
 
                 let fun = self.expr_prec(Prec::Proj, fun);
