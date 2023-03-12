@@ -1,5 +1,5 @@
 use either::*;
-use pion_surface::syntax::Symbol;
+use pion_surface::syntax::{Plicity, Symbol};
 use scoped_arena::Scope;
 
 use crate::env::{EnvLen, Index, Level, SliceEnv, UniqueEnv};
@@ -54,22 +54,22 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 self.local_values.pop();
                 body_value
             }
-            Expr::FunType(name, (domain, codomain)) => {
+            Expr::FunType(plicity, name, (domain, codomain)) => {
                 let scope = self.elim_env.scope;
                 let domain_value = self.eval(domain);
                 let codomain = Closure::new(self.local_values.clone(), codomain);
-                Value::FunType(*name, scope.to_scope(domain_value), codomain)
+                Value::FunType(*plicity, *name, scope.to_scope(domain_value), codomain)
             }
-            Expr::FunLit(name, (domain, body)) => {
+            Expr::FunLit(plicity, name, (domain, body)) => {
                 let scope = self.elim_env.scope;
                 let type_value = self.eval(domain);
                 let body = Closure::new(self.local_values.clone(), body);
-                Value::FunLit(*name, scope.to_scope(type_value), body)
+                Value::FunLit(*plicity, *name, scope.to_scope(type_value), body)
             }
-            Expr::FunApp((fun, arg)) => {
+            Expr::FunApp(plicity, (fun, arg)) => {
                 let fun_value = self.eval(fun);
                 let arg_value = self.eval(arg);
-                self.elim_env.fun_app(fun_value, arg_value)
+                self.elim_env.fun_app(*plicity, fun_value, arg_value)
             }
             Expr::RecordType(labels, types) => {
                 let telescope = Telescope::new(self.local_values.clone(), types);
@@ -119,19 +119,27 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 self.local_values.pop();
                 Expr::Let(self.elim_env.scope.to_scope((def, body)))
             }
-            Expr::FunType(name, (domain, body)) => {
+            Expr::FunType(plicity, name, (domain, body)) => {
                 let domain = self.zonk(domain);
                 (self.local_values).push(Value::local(self.local_values.len().to_level()));
                 let body = self.zonk(body);
                 self.local_values.pop();
-                Expr::FunType(*name, self.elim_env.scope.to_scope((domain, body)))
+                Expr::FunType(
+                    *plicity,
+                    *name,
+                    self.elim_env.scope.to_scope((domain, body)),
+                )
             }
-            Expr::FunLit(name, (domain, body)) => {
+            Expr::FunLit(plicity, name, (domain, body)) => {
                 let domain = self.zonk(domain);
                 (self.local_values).push(Value::local(self.local_values.len().to_level()));
                 let body = self.zonk(body);
                 self.local_values.pop();
-                Expr::FunLit(*name, self.elim_env.scope.to_scope((domain, body)))
+                Expr::FunLit(
+                    *plicity,
+                    *name,
+                    self.elim_env.scope.to_scope((domain, body)),
+                )
             }
             Expr::RecordType(labels, types) => {
                 let len = self.local_values.len();
@@ -167,14 +175,17 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 None => Left(Expr::InsertedMeta(*var, infos)),
                 Some(value) => Right(self.apply_binder_infos(value.clone(), infos)),
             },
-            Expr::FunApp((fun, arg)) => match self.zonk_meta_var_spines(fun) {
+            Expr::FunApp(plicity, (fun, arg)) => match self.zonk_meta_var_spines(fun) {
                 Left(fun) => {
                     let arg = self.zonk(arg);
-                    Left(Expr::FunApp(self.elim_env.scope.to_scope((fun, arg))))
+                    Left(Expr::FunApp(
+                        *plicity,
+                        self.elim_env.scope.to_scope((fun, arg)),
+                    ))
                 }
                 Right(fun_value) => {
                     let arg_value = self.eval(arg);
-                    Right(self.elim_env.fun_app(fun_value, arg_value))
+                    Right(self.elim_env.fun_app(*plicity, fun_value, arg_value))
                 }
             },
             Expr::RecordProj(head, label) => match self.zonk_meta_var_spines(head) {
@@ -193,7 +204,9 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
         for (info, value) in Iterator::zip(infos.iter(), self.local_values.iter()) {
             head = match info {
                 BinderInfo::Def => head,
-                BinderInfo::Param => self.elim_env.fun_app(head, value.clone()),
+                BinderInfo::Param => self
+                    .elim_env
+                    .fun_app(Plicity::Explicit, head, value.clone()),
             };
         }
         head
@@ -245,15 +258,20 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
     /// Apply an expression to an elimination spine.
     fn apply_spine(&self, head: Value<'arena>, spine: &[Elim<'arena>]) -> Value<'arena> {
         spine.iter().fold(head, |head, elim| match elim {
-            Elim::FunApp(arg) => self.fun_app(head, arg.clone()),
+            Elim::FunApp(plicity, arg) => self.fun_app(*plicity, head, arg.clone()),
             Elim::RecordProj(label) => self.record_proj(head, *label),
         })
     }
 
-    pub fn fun_app(&self, fun: Value<'arena>, arg: Value<'arena>) -> Value<'arena> {
+    pub fn fun_app(
+        &self,
+        plicity: Plicity,
+        fun: Value<'arena>,
+        arg: Value<'arena>,
+    ) -> Value<'arena> {
         match fun {
             Value::Stuck(head, mut spine) => {
-                spine.push(Elim::FunApp(arg));
+                spine.push(Elim::FunApp(plicity, arg));
                 Value::Stuck(head, spine)
             }
             Value::FunLit(.., body) => self.apply_closure(body, arg),
@@ -328,21 +346,23 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
             Value::Stuck(head, spine) => {
                 let scope = self.elim_env.scope;
                 (spine.iter()).fold(self.quote_head(head), |head, elim| match elim {
-                    Elim::FunApp(arg) => Expr::FunApp(scope.to_scope((head, self.quote(arg)))),
+                    Elim::FunApp(plicity, arg) => {
+                        Expr::FunApp(*plicity, scope.to_scope((head, self.quote(arg))))
+                    }
                     Elim::RecordProj(label) => Expr::RecordProj(scope.to_scope(head), *label),
                 })
             }
-            Value::FunType(name, domain, codomain) => {
+            Value::FunType(plicity, name, domain, codomain) => {
                 let scope = self.elim_env.scope;
                 let domain = self.quote(domain);
                 let codomain = self.quote_closure(&codomain);
-                Expr::FunType(name, scope.to_scope((domain, codomain)))
+                Expr::FunType(plicity, name, scope.to_scope((domain, codomain)))
             }
-            Value::FunLit(name, domain, body) => {
+            Value::FunLit(plicity, name, domain, body) => {
                 let scope = self.elim_env.scope;
                 let domain = self.quote(domain);
                 let body = self.quote_closure(&body);
-                Expr::FunType(name, scope.to_scope((domain, body)))
+                Expr::FunType(plicity, name, scope.to_scope((domain, body)))
             }
             Value::RecordType(labels, telescope) => {
                 let scope = self.elim_env.scope;

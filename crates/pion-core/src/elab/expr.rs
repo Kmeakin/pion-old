@@ -1,4 +1,5 @@
 use pion_source::location::ByteRange;
+use pion_surface::syntax::Plicity;
 
 use super::*;
 
@@ -59,7 +60,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 self.local_env.pop();
                 (Expr::Let(self.scope.to_scope((def, body_expr))), body_type)
             }
-            surface::Expr::Arrow(_, (domain, codomain)) => {
+            surface::Expr::Arrow(_, plicity, (domain, codomain)) => {
                 let domain = self.check(domain, &Type::TYPE);
                 let domain_value = self.eval_env().eval(&domain);
 
@@ -67,7 +68,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let codomain = self.check(codomain, &Type::TYPE);
                 self.local_env.pop();
 
-                let expr = Expr::FunType(None, self.scope.to_scope((domain, codomain)));
+                let expr = Expr::FunType(*plicity, None, self.scope.to_scope((domain, codomain)));
                 (expr, Type::TYPE)
             }
             surface::Expr::FunType(_, params, body) => {
@@ -87,13 +88,29 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
 
                 for (arity, arg) in args.iter().enumerate() {
                     r#type = self.elim_env().update_metas(&r#type);
+
+                    if arg.plicity == Plicity::Explicit {
+                        (expr, r#type) = self.insert_implicit_apps(fun_range, expr, r#type);
+                    }
+
                     match r#type {
-                        Value::FunType(_, domain, codomain) => {
-                            let arg_expr = self.check(arg, domain);
+                        Value::FunType(plicity, _, domain, codomain) if arg.plicity == plicity => {
+                            let arg_expr = self.check(&arg.expr, domain);
                             let arg_value = self.eval_env().eval(&arg_expr);
 
-                            expr = Expr::FunApp(self.scope.to_scope((expr, arg_expr)));
+                            expr = Expr::FunApp(plicity, self.scope.to_scope((expr, arg_expr)));
                             r#type = self.elim_env().apply_closure(codomain, arg_value);
+                        }
+                        Value::FunType(plicity, ..) => {
+                            let fun_type = self.pretty_value(&fun_type);
+                            self.emit_error(ElabError::FunAppPlicity {
+                                fun_range,
+                                fun_type,
+                                fun_plicity: plicity,
+                                arg_range: arg.range(),
+                                arg_plicity: arg.plicity,
+                            });
+                            return synth_error_expr();
                         }
                         _ if expr.is_error() || r#type.is_error() => return synth_error_expr(),
                         _ if arity == 0 => {
@@ -222,7 +239,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             }
             surface::Expr::RecordProj(_, head, labels) => {
                 let mut head_range = head.range();
-                let (mut head_expr, mut head_type) = self.synth(head);
+                let (mut head_expr, mut head_type) = self.synth_and_insert_implicit_apps(head);
 
                 for (label_range, proj_label) in labels.iter() {
                     head_type = self.elim_env().update_metas(&head_type);
@@ -279,6 +296,40 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
         }
     }
 
+    /// Synthesize the type of `expr`, wrapping it in fresh implicit
+    /// applications if the term was not an implicit function literal.
+    fn synth_and_insert_implicit_apps(
+        &mut self,
+        expr: &surface::Expr<'_, ByteRange>,
+    ) -> (Expr<'arena>, Type<'arena>) {
+        let (term, r#type) = self.synth(expr);
+        match term {
+            Expr::FunLit(Plicity::Implicit, ..) => (term, r#type),
+            term => self.insert_implicit_apps(expr.range(), term, r#type),
+        }
+    }
+
+    /// Wrap an expr in fresh implicit applications that correspond to implicit
+    /// parameters in the type provided.
+    fn insert_implicit_apps(
+        &mut self,
+        range: ByteRange,
+        mut expr: Expr<'arena>,
+        mut r#type: Type<'arena>,
+    ) -> (Expr<'arena>, Type<'arena>) {
+        while let Value::FunType(Plicity::Implicit, name, param_type, body_type) =
+            self.elim_env().update_metas(&r#type)
+        {
+            let source = MetaSource::ImplicitArg(range, name);
+            let arg_expr = self.push_unsolved_expr(source, param_type.clone());
+            let arg_value = self.eval_env().eval(&arg_expr);
+
+            expr = Expr::FunApp(Plicity::Implicit, self.scope.to_scope((expr, arg_expr)));
+            r#type = self.elim_env().apply_closure(body_type, arg_value);
+        }
+        (expr, r#type)
+    }
+
     fn synth_let_def(&mut self, def: &surface::LetDef) -> LetDef<'arena> {
         let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
         let name = pat.name();
@@ -311,7 +362,11 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let (body_expr, _) = self.synth_fun_type(params, body);
                 self.local_env.pop();
 
-                let expr = Expr::FunType(name, self.scope.to_scope((param_type_expr, body_expr)));
+                let expr = Expr::FunType(
+                    param.plicity,
+                    name,
+                    self.scope.to_scope((param_type_expr, body_expr)),
+                );
                 let r#type = Value::TYPE;
                 (expr, r#type)
             }
@@ -335,8 +390,13 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let body_type_expr = self.quote_env().quote(&body_type);
                 self.local_env.pop();
 
-                let expr = Expr::FunLit(name, self.scope.to_scope((param_type_expr, body_expr)));
+                let expr = Expr::FunLit(
+                    param.plicity,
+                    name,
+                    self.scope.to_scope((param_type_expr, body_expr)),
+                );
                 let r#type = Value::FunType(
+                    param.plicity,
                     name,
                     self.scope.to_scope(param_type),
                     Closure::new(
@@ -361,9 +421,9 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             Some((param, next_params)) => {
                 let expected = self.elim_env().update_metas(expected);
                 match expected {
-                    Value::FunType(_, domain, codomain) => {
+                    Value::FunType(plicity, _, domain, codomain) if param.plicity == plicity => {
                         let pat = self.check_ann_pat(&param.pat, &param.r#type, domain);
-                        let param_type_expr = self.quote_env().quote(domain);
+                        let domain_expr = self.quote_env().quote(domain);
                         let name = pat.name();
 
                         let arg = self.local_env.next_var();
@@ -372,7 +432,24 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                         let body_expr = self.check_fun_lit(range, next_params, body, &body_type);
                         self.local_env.pop();
 
-                        Expr::FunLit(name, self.scope.to_scope((param_type_expr, body_expr)))
+                        Expr::FunLit(plicity, name, self.scope.to_scope((domain_expr, body_expr)))
+                    }
+                    // If an implicit function is expected, try to generalize the
+                    // function literal by wrapping it in an implicit function
+                    Value::FunType(Plicity::Implicit, name, domain, codomain) => {
+                        let domain_expr = self.quote_env().quote(domain);
+
+                        let arg = self.local_env.next_var();
+                        self.local_env.push_param(name, domain.clone());
+                        let body_type = self.elim_env().apply_closure(codomain, arg);
+                        let body_expr = self.check_fun_lit(range, params, body, &body_type);
+                        self.local_env.pop();
+
+                        Expr::FunLit(
+                            Plicity::Implicit,
+                            name,
+                            self.scope.to_scope((domain_expr, body_expr)),
+                        )
                     }
                     _ if expected.is_error() => Expr::Error,
                     _ => {
@@ -398,6 +475,12 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             (surface::Expr::FunLit(range, params, body), _) => {
                 self.local_env.reserve(params.len());
                 self.check_fun_lit(*range, params, body, &expected)
+            }
+            // Attempt to specialize terms with freshly inserted implicit
+            // arguments if an explicit function was expected.
+            (_, Value::FunType(Plicity::Explicit, ..)) => {
+                let (synth_expr, synth_type) = self.synth_and_insert_implicit_apps(expr);
+                self.convert(expr.range(), synth_expr, &synth_type, &expected)
             }
             (surface::Expr::TupleLit(_, elems), _) if expected.is_type() => {
                 let mut labels = Vec::with_capacity(elems.len());
@@ -440,9 +523,8 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 Expr::RecordLit(labels, self.scope.to_scope_from_iter(exprs))
             }
             _ => {
-                let range = expr.range();
-                let (expr, r#type) = self.synth(expr);
-                self.convert(range, expr, &r#type, &expected)
+                let (synth_expr, synth_type) = self.synth(expr);
+                self.convert(expr.range(), synth_expr, &synth_type, &expected)
             }
         }
     }

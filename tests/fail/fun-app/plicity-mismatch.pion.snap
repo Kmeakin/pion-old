@@ -1,0 +1,25 @@
+exit status: 0
+stdout:
+let id1 : fun (A : Type) -> A -> A = fun (A : Type) (a : A) => a;
+let id2 : fun (@A : Type) -> A -> A = fun (@A : Type) (a : A) => a;
+let _ : Bool = #error;
+let _ : Bool = #error;
+() : ()
+
+stderr:
+error: tried to apply implicit argument where explicit argument was expected
+  ┌─ tests/fail/fun-app/plicity-mismatch.pion:6:20
+  │
+6 │ let _ : Bool = id1 @Bool true;
+  │                --- ^^^^^ implicit argument
+  │                │    
+  │                explicit function of type `fun (A : Type) -> A -> A`
+
+error: tried to apply implicit argument where explicit argument was expected
+  ┌─ tests/fail/fun-app/plicity-mismatch.pion:7:26
+  │
+7 │ let _ : Bool = id2 @Bool @true;
+  │                ---       ^^^^^ implicit argument
+  │                │          
+  │                explicit function of type `fun (@A : Type) -> A -> A`
+

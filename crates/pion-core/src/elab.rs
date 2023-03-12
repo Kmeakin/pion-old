@@ -256,4 +256,6 @@ pub enum MetaSource {
     HoleExpr(ByteRange, Symbol),
 
     PatType(ByteRange),
+
+    ImplicitArg(ByteRange, Option<Symbol>),
 }

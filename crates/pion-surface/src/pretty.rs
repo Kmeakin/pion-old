@@ -36,9 +36,11 @@ impl<'arena> PrettyCtx<'arena> {
                 .append(";")
                 .append(self.line())
                 .append(self.expr(body)),
-            Expr::Arrow(_, (r#type, body)) => {
-                self.expr(r#type).append(" -> ").append(self.expr(body))
-            }
+            Expr::Arrow(_, plicity, (r#type, body)) => self
+                .plicity(*plicity)
+                .append(self.expr(r#type))
+                .append(" -> ")
+                .append(self.expr(body)),
             Expr::FunType(_, params, body) => self
                 .text("fun ")
                 .append(
@@ -55,7 +57,7 @@ impl<'arena> PrettyCtx<'arena> {
                 .append(self.expr(body)),
             Expr::FunApp(_, fun, args) => self
                 .expr(fun)
-                .append(self.concat(args.iter().map(|arg| self.space().append(self.expr(arg))))),
+                .append(self.concat(args.iter().map(|arg| self.space().append(self.arg(arg))))),
             Expr::RecordType(_, fields) => self.sequence(
                 true,
                 self.text("{"),
@@ -118,15 +120,32 @@ impl<'arena> PrettyCtx<'arena> {
 
     fn param<Extra>(&'arena self, param: &Param<'_, Extra>) -> DocBuilder<'arena> {
         match param {
-            Param { pat, r#type: None } => self.pat(pat),
             Param {
+                plicity,
+                pat,
+                r#type: None,
+            } => self.plicity(*plicity).append(self.pat(pat)),
+            Param {
+                plicity,
                 pat,
                 r#type: Some(r#type),
             } => self
-                .pat(pat)
+                .plicity(*plicity)
+                .append(self.pat(pat))
                 .append(" : ")
                 .append(self.expr(r#type))
                 .parens(),
+        }
+    }
+
+    fn arg<Extra>(&'arena self, arg: &Arg<'_, Extra>) -> DocBuilder<'arena> {
+        self.plicity(arg.plicity).append(self.expr(&arg.expr))
+    }
+
+    fn plicity(&'arena self, plicity: Plicity) -> DocBuilder<'arena> {
+        match plicity {
+            Plicity::Explicit => self.nil(),
+            Plicity::Implicit => self.text("@"),
         }
     }
 

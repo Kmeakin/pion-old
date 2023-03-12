@@ -1,0 +1,15 @@
+exit status: 0
+stdout:
+let id : fun (@A : Type) -> A -> A = fun (@A : Type) (a : A) => a;
+let always : fun (@A : Type) (@B : Type) -> A -> B -> A = fun (@A : Type) (@B : Type) (a : A) (b : B) => a;
+let apply : fun (@A : Type) (@B : Type) -> (A -> B) -> A -> B = fun (@A : Type) (@B : Type) (f : A -> B) (x : A) => f x;
+let _ : fun (@A : Type) -> A -> A = id;
+let _ : fun (@A : Type) (@B : Type) -> A -> B -> A = always;
+let _ : fun (@A : Type) (@B : Type) -> (A -> B) -> A -> B = apply;
+let _ : Bool -> Bool = id @Bool;
+let _ : Bool -> Int -> Bool = always @Bool @Int;
+let _ : (Bool -> Int) -> Bool -> Int = apply @Bool @Int;
+let _ : Bool = apply @Int @Bool (always @Bool @Int false) 0;
+() : ()
+
+stderr:

@@ -1,3 +1,5 @@
+use pion_surface::syntax::Plicity;
+
 use super::*;
 use crate::env::{Level, SliceEnv};
 
@@ -242,14 +244,21 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                 self.unify_spines(spine1, spine2)
             }
 
-            (Value::FunType(_, domain1, body1), Value::FunType(_, domain2, body2))
-            | (Value::FunLit(_, domain1, body1), Value::FunLit(_, domain2, body2)) => {
+            (
+                Value::FunType(plicity1, _, domain1, body1),
+                Value::FunType(plicity2, _, domain2, body2),
+            )
+            | (
+                Value::FunLit(plicity1, _, domain1, body1),
+                Value::FunLit(plicity2, _, domain2, body2),
+            ) if plicity1 == plicity2 => {
                 self.unify(domain1, domain2)?;
                 self.unify_closures(body1, body2)
             }
 
-            (Value::FunLit(_, _, body), other) | (other, Value::FunLit(_, _, body)) => {
-                self.unify_fun_lit(body, other)
+            (Value::FunLit(plicity, _, _, body), other)
+            | (other, Value::FunLit(plicity, _, _, body)) => {
+                self.unify_fun_lit(*plicity, body, other)
             }
 
             (Value::RecordType(labels1, telescope1), Value::RecordType(labels2, telescope2))
@@ -303,7 +312,11 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
 
         for (elim1, elim2) in Iterator::zip(spine1.iter(), spine2.iter()) {
             match (elim1, elim2) {
-                (Elim::FunApp(arg1), Elim::FunApp(arg2)) => self.unify(arg1, arg2)?,
+                (Elim::FunApp(plicity1, arg1), Elim::FunApp(plicity2, arg2))
+                    if plicity1 == plicity2 =>
+                {
+                    self.unify(arg1, arg2)?;
+                }
                 (Elim::RecordProj(label1), Elim::RecordProj(label2)) if label1 == label2 => {}
                 _ => return Err(UnifyError::Mismatch),
             }
@@ -369,12 +382,13 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     /// ```
     fn unify_fun_lit(
         &mut self,
+        plicity: Plicity,
         body: &Closure<'arena>,
         value: &Value<'arena>,
     ) -> Result<(), UnifyError> {
         let var = Value::local(self.local_env.to_level());
         let value1 = self.elim_env().apply_closure(body.clone(), var.clone());
-        let value2 = self.elim_env().fun_app(value.clone(), var.clone());
+        let value2 = self.elim_env().fun_app(plicity, value.clone(), var.clone());
 
         self.local_env.push();
         let result = self.unify(&value1, &value2);
@@ -436,7 +450,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
 
         for elim in spine {
             match elim {
-                Elim::FunApp(arg) => match self.elim_env().update_metas(arg) {
+                Elim::FunApp(_, arg) => match self.elim_env().update_metas(arg) {
                     Value::Stuck(Head::Local(source_var), spine)
                         if spine.is_empty() && self.renaming.set_local(source_var) => {}
                     Value::Stuck(Head::Local(source_var), _) => {
@@ -454,7 +468,9 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     /// given `spine`.
     fn fun_intros(&self, spine: &[Elim<'arena>], expr: Expr<'arena>) -> Expr<'arena> {
         spine.iter().fold(expr, |expr, elim| match elim {
-            Elim::FunApp(..) => Expr::FunLit(None, self.scope.to_scope((Expr::Error, expr))),
+            Elim::FunApp(plicity, ..) => {
+                Expr::FunLit(*plicity, None, self.scope.to_scope((Expr::Error, expr)))
+            }
             Elim::RecordProj(_) => {
                 unreachable!("should have been caught by `init_renaming`")
             }
@@ -491,24 +507,32 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                     },
                 };
                 (spine.iter()).try_fold(head, |head, elim| match elim {
-                    Elim::FunApp(arg) => {
+                    Elim::FunApp(plicity, arg) => {
                         let arg = self.rename(meta_var, arg)?;
-                        Ok(Expr::FunApp(self.scope.to_scope((head, arg))))
+                        Ok(Expr::FunApp(*plicity, self.scope.to_scope((head, arg))))
                     }
                     Elim::RecordProj(label) => {
                         Ok(Expr::RecordProj(self.scope.to_scope(head), *label))
                     }
                 })
             }
-            Value::FunType(name, domain, body) => {
+            Value::FunType(plicity, name, domain, body) => {
                 let domain = self.rename(meta_var, domain)?;
                 let body = self.rename_closure(meta_var, &body)?;
-                Ok(Expr::FunType(name, self.scope.to_scope((domain, body))))
+                Ok(Expr::FunType(
+                    plicity,
+                    name,
+                    self.scope.to_scope((domain, body)),
+                ))
             }
-            Value::FunLit(name, domain, body) => {
+            Value::FunLit(plicity, name, domain, body) => {
                 let domain = self.rename(meta_var, domain)?;
                 let body = self.rename_closure(meta_var, &body)?;
-                Ok(Expr::FunLit(name, self.scope.to_scope((domain, body))))
+                Ok(Expr::FunLit(
+                    plicity,
+                    name,
+                    self.scope.to_scope((domain, body)),
+                ))
             }
             Value::RecordType(labels, telescope) => {
                 let types = self.rename_telescope(meta_var, telescope)?;
