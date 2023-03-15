@@ -471,8 +471,12 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     fn fun_intros(&self, spine: &[Elim<'arena>], expr: Expr<'arena>) -> Expr<'arena> {
         spine.iter().fold(expr, |expr, elim| match elim {
             Elim::FunApp(plicity, ..) => {
-                self.expr_builder()
-                    .fun_lit(*plicity, None, Expr::Error, expr)
+                self.expr_builder().fun_lit(
+                    *plicity,
+                    None,
+                    Expr::Error, // TODO: what should the domain be?
+                    expr,
+                )
             }
             Elim::RecordProj(_) => {
                 unreachable!("should have been caught by `init_renaming`")
