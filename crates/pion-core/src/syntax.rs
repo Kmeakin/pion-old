@@ -4,7 +4,7 @@ use internal_iterator::InternalIterator;
 use pion_surface::syntax::{Plicity, Symbol};
 use scoped_arena::Scope;
 
-use crate::env::{EnvLen, Index, Level, UniqueEnv};
+use crate::env::{EnvLen, Index, Level, SharedEnv};
 use crate::prim::Prim;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -96,24 +96,24 @@ pub enum Elim<'arena> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Closure<'arena> {
-    pub local_values: UniqueEnv<Value<'arena>>,
+    pub local_values: SharedEnv<Value<'arena>>,
     pub expr: &'arena Expr<'arena>,
 }
 
 impl<'arena> Closure<'arena> {
-    pub fn new(local_values: UniqueEnv<Value<'arena>>, expr: &'arena Expr<'arena>) -> Self {
+    pub fn new(local_values: SharedEnv<Value<'arena>>, expr: &'arena Expr<'arena>) -> Self {
         Self { local_values, expr }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Telescope<'arena> {
-    pub local_values: UniqueEnv<Value<'arena>>,
+    pub local_values: SharedEnv<Value<'arena>>,
     pub exprs: &'arena [Expr<'arena>],
 }
 
 impl<'arena> Telescope<'arena> {
-    pub fn new(local_values: UniqueEnv<Value<'arena>>, exprs: &'arena [Expr<'arena>]) -> Self {
+    pub fn new(local_values: SharedEnv<Value<'arena>>, exprs: &'arena [Expr<'arena>]) -> Self {
         Self {
             local_values,
             exprs,
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn value_size() {
-        assert_eq!(size_of::<Value>(), 64);
+        assert_eq!(size_of::<Value>(), 48);
     }
 
     #[test]

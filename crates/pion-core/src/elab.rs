@@ -4,7 +4,7 @@ use scoped_arena::Scope;
 
 use self::unify::{PartialRenaming, UnifyCtx};
 use crate::distill::DistillCtx;
-use crate::env::{EnvLen, Index, Level, UniqueEnv};
+use crate::env::{EnvLen, Index, Level, SharedEnv, UniqueEnv};
 use crate::prim::PrimEnv;
 use crate::reporting::ElabError;
 use crate::semantics::{ElimEnv, EvalEnv, QuoteEnv};
@@ -166,7 +166,7 @@ struct LocalEnv<'arena> {
     types: UniqueEnv<Value<'arena>>,
     /// Values that will be substituted for local variables during
     /// [evaluation][semantics::EvalEnv::eval].
-    values: UniqueEnv<Value<'arena>>,
+    values: SharedEnv<Value<'arena>>,
 }
 
 impl<'arena> LocalEnv<'arena> {

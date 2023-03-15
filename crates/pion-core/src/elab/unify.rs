@@ -438,7 +438,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         self.init_renaming(spine)?;
         let expr = self.rename(meta_var, value)?;
         let fun_expr = self.fun_intros(spine, expr);
-        let mut local_values = UniqueEnv::default();
+        let mut local_values = SharedEnv::default();
         let solution = self.elim_env().eval_env(&mut local_values).eval(&fun_expr);
         self.meta_values.set_level(meta_var, Some(solution));
         Ok(())

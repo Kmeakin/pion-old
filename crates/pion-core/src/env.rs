@@ -1,4 +1,5 @@
 use std::fmt;
+use std::rc::Rc;
 
 type RawIdx = usize;
 
@@ -80,7 +81,8 @@ impl<T> Default for UniqueEnv<T> {
 }
 
 impl<T> UniqueEnv<T> {
-    /// Clear the renaming. This is useful for reusing environment allocations.
+    /// Clear the environment. This is useful for reusing environment
+    /// allocations.
     pub fn clear(&mut self) { self.entries.clear() }
 
     /// Resize the environment to `len`, filling new entries with `elem`.
@@ -112,6 +114,56 @@ impl<T> std::ops::Deref for UniqueEnv<T> {
 
 impl<T> std::ops::DerefMut for UniqueEnv<T> {
     fn deref_mut(&mut self) -> &mut SliceEnv<T> { (&mut self.entries[..]).into() }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedEnv<T> {
+    entries: Rc<Vec<T>>,
+}
+
+impl<T> Default for SharedEnv<T> {
+    fn default() -> Self {
+        Self {
+            entries: Rc::new(Vec::default()),
+        }
+    }
+}
+
+impl<T: Clone> SharedEnv<T> {
+    /// Clear the environment. This is useful for reusing environment
+    /// allocations.
+    pub fn clear(&mut self) { Rc::make_mut(&mut self.entries).clear() }
+
+    /// Resize the environment to `len`, filling new entries with `elem`.
+    pub fn resize(&mut self, len: EnvLen, elem: T) {
+        Rc::make_mut(&mut self.entries).resize(len.0, elem);
+    }
+
+    /// Push `elem` onto the environment.
+    pub fn push(&mut self, elem: T) { Rc::make_mut(&mut self.entries).push(elem) }
+
+    /// Pop an element off the environment.
+    pub fn pop(&mut self) -> Option<T> { Rc::make_mut(&mut self.entries).pop() }
+
+    /// Truncate the environment to `len`.
+    pub fn truncate(&mut self, len: EnvLen) { Rc::make_mut(&mut self.entries).truncate(len.0) }
+
+    /// Reserve space for `additional` extra elements.
+    pub fn reserve(&mut self, additional: usize) {
+        Rc::make_mut(&mut self.entries).reserve(additional);
+    }
+}
+
+impl<T> std::ops::Deref for SharedEnv<T> {
+    type Target = SliceEnv<T>;
+
+    fn deref(&self) -> &SliceEnv<T> { self.entries[..].into() }
+}
+
+impl<T: Clone> std::ops::DerefMut for SharedEnv<T> {
+    fn deref_mut(&mut self) -> &mut SliceEnv<T> {
+        (&mut Rc::make_mut(&mut self.entries)[..]).into()
+    }
 }
 
 /// An environment backed by a slice.

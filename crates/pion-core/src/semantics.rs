@@ -2,20 +2,20 @@ use either::*;
 use pion_surface::syntax::{Plicity, Symbol};
 use scoped_arena::Scope;
 
-use crate::env::{EnvLen, Index, Level, SliceEnv, UniqueEnv};
+use crate::env::{EnvLen, Index, Level, SharedEnv, SliceEnv};
 use crate::syntax::*;
 
 pub struct EvalEnv<'arena, 'env> {
     scope: &'arena Scope<'arena>,
     elim_env: ElimEnv<'arena, 'env>,
-    local_values: &'env mut UniqueEnv<Value<'arena>>,
+    local_values: &'env mut SharedEnv<Value<'arena>>,
 }
 
 impl<'arena, 'env> EvalEnv<'arena, 'env> {
     pub fn new(
         scope: &'arena Scope<'arena>,
         elim_env: ElimEnv<'arena, 'env>,
-        local_values: &'env mut UniqueEnv<Value<'arena>>,
+        local_values: &'env mut SharedEnv<Value<'arena>>,
     ) -> Self {
         Self {
             scope,
@@ -233,7 +233,7 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
 
     pub fn eval_env(
         &self,
-        local_values: &'env mut UniqueEnv<Value<'arena>>,
+        local_values: &'env mut SharedEnv<Value<'arena>>,
     ) -> EvalEnv<'arena, 'env> {
         EvalEnv::new(self.scope, *self, local_values)
     }
