@@ -46,30 +46,45 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
 
     fn pop_local(&mut self) { self.local_names.pop(); }
 
-    fn param(
-        &mut self,
-        plicity: Plicity,
-        name: Option<Symbol>,
-        r#type: &Expr<'_>,
-    ) -> surface::Param<'arena, ()> {
-        let param = surface::Param {
-            plicity,
-            pat: name_to_pat(name),
-            r#type: Some(self.expr_prec(Prec::Top, r#type)),
-        };
-        self.push_local(name);
-        param
+    fn is_bound(&self, name: Symbol) -> bool {
+        self.local_names
+            .iter()
+            .any(|local_name| *local_name == Some(name))
     }
 
-    fn let_def(&mut self, def: &LetDef<'_>) -> surface::LetDef<'arena, ()> {
-        let name = def.name;
-        let def = surface::LetDef {
-            pat: name_to_pat(def.name),
-            r#type: Some(self.expr_prec(Prec::Top, &def.r#type)),
-            expr: (self.expr_prec(Prec::Let, &def.expr)),
-        };
-        self.push_local(name);
-        def
+    /// Generate a fresh name that does not appear in `self.local_names`
+    fn gen_fresh_name(&mut self) -> Symbol {
+        fn to_str(x: u32) -> String {
+            let base = x / 26;
+            let letter = x % 26;
+            let letter = (letter as u8 + b'a') as char;
+            if base == 0 {
+                format!("{letter}")
+            } else {
+                format!("{letter}{base}")
+            }
+        }
+
+        let mut counter = 0;
+        loop {
+            let name = to_str(counter).into();
+            match self.is_bound(name) {
+                true => {}
+                false => return name,
+            }
+            counter += 1;
+        }
+    }
+
+    /// Replace `name` with a fresh name if it is `_` and occurs in `body`
+    fn freshen_name(&mut self, name: Option<Symbol>, body: &Expr<'_>) -> Option<Symbol> {
+        match name {
+            Some(name) => Some(name),
+            None => match body.binds_local(EnvLen::default()) {
+                false => None,
+                true => Some(self.gen_fresh_name()),
+            },
+        }
     }
 
     pub fn expr(&mut self, expr: &Expr<'_>) -> surface::Expr<'arena, ()> {
@@ -90,7 +105,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
             Expr::Error => surface::Expr::Error(()),
             Expr::Local(var) => match self.local_names.get_index(*var) {
                 Some(Some(name)) => surface::Expr::Ident((), *name),
-                Some(None) => unreachable!("Referenced local variable without name"),
+                Some(None) => unreachable!("Referenced local variable without name: {var:?}"),
                 None => panic!("Unbound local variable: {var:?}"),
             },
             Expr::Meta(var) => match self.meta_sources.get_level(*var) {
@@ -122,7 +137,15 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
             Expr::Lit(literal) => surface::Expr::Lit((), lit(*literal)),
             Expr::Prim(primitive) => prim(*primitive),
             Expr::Let((def, body)) => {
-                let def = self.let_def(def);
+                let name = def.name;
+                let def = surface::LetDef {
+                    pat: name_to_pat(def.name),
+                    r#type: Some(self.expr_prec(Prec::Top, &def.r#type)),
+                    expr: self.expr_prec(Prec::Let, &def.expr),
+                };
+
+                let name = self.freshen_name(name, body);
+                self.push_local(name);
                 let body = self.expr_prec(Prec::Let, body);
                 self.pop_local();
 
@@ -139,7 +162,14 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                         Expr::FunType(plicity, name, (r#type, next_body))
                             if next_body.binds_local(EnvLen::default()) =>
                         {
-                            params.push(self.param(*plicity, *name, r#type));
+                            let r#type = self.expr_prec(Prec::Top, r#type);
+                            let name = self.freshen_name(*name, next_body);
+                            self.push_local(name);
+                            params.push(surface::Param {
+                                plicity: *plicity,
+                                pat: name_to_pat(name),
+                                r#type: Some(r#type),
+                            });
                             body = next_body;
                         }
                         // Use arrow sugar if the parameter is not referenced in the body type.
@@ -170,7 +200,14 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
 
                 let initial_len = self.local_len();
                 while let Expr::FunLit(plicity, name, (r#type, next_body)) = body {
-                    params.push(self.param(*plicity, *name, r#type));
+                    let r#type = self.expr_prec(Prec::Top, r#type);
+                    let name = self.freshen_name(*name, next_body);
+                    self.push_local(name);
+                    params.push(surface::Param {
+                        plicity: *plicity,
+                        pat: name_to_pat(name),
+                        r#type: Some(r#type),
+                    });
                     body = next_body;
                 }
                 let body = self.expr_prec(Prec::Fun, body);
