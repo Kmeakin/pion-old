@@ -65,9 +65,8 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let domain = self.check(domain, &Type::TYPE);
                 let domain_value = self.eval_env().eval(&domain);
 
-                self.local_env.push_param(None, domain_value);
-                let codomain = self.check(codomain, &Type::TYPE);
-                self.local_env.pop();
+                let codomain =
+                    self.with_param(None, domain_value, |this| this.check(codomain, &Type::TYPE));
 
                 let expr = expr_builder.fun_type(*plicity, None, domain, codomain);
                 (expr, Type::TYPE)
@@ -152,26 +151,26 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let mut labels = Vec::with_capacity(fields.len());
                 let mut types = Vec::with_capacity(fields.len());
 
-                let len = self.local_env.len();
-                for field in fields.iter() {
-                    let r#type = self.check(&field.r#type, &Type::TYPE);
-                    let type_value = self.eval_env().eval(&r#type);
+                self.with_scope(|this| {
+                    for field in fields.iter() {
+                        let r#type = this.check(&field.r#type, &Type::TYPE);
+                        let type_value = this.eval_env().eval(&r#type);
 
-                    let (label_range, label) = field.label;
-                    if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
-                        self.emit_error(ElabError::RecordFieldDuplicate {
-                            name: "record type",
-                            label,
-                            first_range: *first_range,
-                            duplicate_range: label_range,
-                        });
-                    } else {
-                        self.local_env.push_param(Some(label), type_value);
-                        labels.push((label_range, label));
-                        types.push(r#type);
+                        let (label_range, label) = field.label;
+                        if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
+                            this.emit_error(ElabError::RecordFieldDuplicate {
+                                name: "record type",
+                                label,
+                                first_range: *first_range,
+                                duplicate_range: label_range,
+                            });
+                        } else {
+                            this.local_env.push_param(Some(label), type_value);
+                            labels.push((label_range, label));
+                            types.push(r#type);
+                        }
                     }
-                }
-                self.local_env.truncate(len);
+                });
 
                 let labels = self
                     .scope
@@ -358,15 +357,13 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let domain_expr = self.quote_env().quote(&param_type);
                 let name = pat.name();
 
-                self.local_env.push_param(name, param_type);
-                let (body_expr, _) = self.synth_fun_type(params, body);
-                self.local_env.pop();
+                let (body_expr, _) =
+                    self.with_param(name, param_type, |this| this.synth_fun_type(params, body));
 
                 let expr =
                     self.expr_builder()
                         .fun_type(param.plicity, name, domain_expr, body_expr);
-                let r#type = Value::TYPE;
-                (expr, r#type)
+                (expr, Value::TYPE)
             }
         }
     }
@@ -383,10 +380,10 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let domain_expr = self.quote_env().quote(&param_type);
                 let name = pat.name();
 
-                self.local_env.push_param(name, param_type.clone());
-                let (body_expr, body_type) = self.synth_fun_lit(params, body);
-                let body_type_expr = self.quote_env().quote(&body_type);
-                self.local_env.pop();
+                let (body_expr, body_type) = self.with_param(name, param_type.clone(), |this| {
+                    let (body_expr, body_type) = this.synth_fun_lit(params, body);
+                    (body_expr, this.quote_env().quote(&body_type))
+                });
 
                 let expr = self
                     .expr_builder()
@@ -397,7 +394,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                     self.scope.to_scope(param_type),
                     Closure::new(
                         self.local_env.values.clone(),
-                        self.scope.to_scope(body_type_expr),
+                        self.scope.to_scope(body_type),
                     ),
                 );
                 (expr, r#type)
@@ -481,17 +478,16 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let mut labels = Vec::with_capacity(elems.len());
                 let mut types = Vec::with_capacity(elems.len());
 
-                let len = self.local_env.len();
-                for (idx, expr) in elems.iter().enumerate() {
-                    let r#type = self.check(expr, &Type::TYPE);
-                    let label = Symbol::from(&format!("_{idx}"));
-                    labels.push(label);
-                    types.push(r#type);
-                    let type_value = self.eval_env().eval(&r#type);
-                    self.local_env.push_param(Some(label), type_value);
-                }
-                self.local_env.truncate(len);
-
+                self.with_scope(|this| {
+                    for (idx, expr) in elems.iter().enumerate() {
+                        let r#type = this.check(expr, &Type::TYPE);
+                        let label = Symbol::from(&format!("_{idx}"));
+                        labels.push(label);
+                        types.push(r#type);
+                        let type_value = this.eval_env().eval(&r#type);
+                        this.local_env.push_param(Some(label), type_value);
+                    }
+                });
                 let labels = self.scope.to_scope_from_iter(labels);
                 let types = self.scope.to_scope_from_iter(types);
 

@@ -121,6 +121,27 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
         let doc = ctx.expr(&surface_expr);
         doc.pretty(usize::MAX).to_string()
     }
+
+    /// Run `f`, potentially modifying the local environment, then restore the
+    /// local environment to its previous state.
+    fn with_scope<T>(&mut self, mut f: impl FnMut(&mut Self) -> T) -> T {
+        let initial_len = self.local_env.len();
+        let result = f(self);
+        self.local_env.truncate(initial_len);
+        result
+    }
+
+    fn with_param<T>(
+        &mut self,
+        name: Option<Symbol>,
+        r#type: Type<'arena>,
+        mut f: impl FnMut(&mut Self) -> T,
+    ) -> T {
+        self.local_env.push_param(name, r#type);
+        let result = f(self);
+        self.local_env.pop();
+        result
+    }
 }
 
 /// Local variable environment.
