@@ -290,6 +290,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 }
                 (head_expr, head_type)
             }
+            surface::Expr::Match(..) => todo!(),
         }
     }
 

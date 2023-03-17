@@ -26,6 +26,7 @@ pub enum Token<'src> {
     #[token("false")] KwFalse,
     #[token("fun")]   KwFun,
     #[token("let")]   KwLet,
+    #[token("match")] KwMatch,
     #[token("true")]  KwTrue,
 
     #[token("_")]  Underscore,
@@ -55,6 +56,7 @@ impl<'src> Token<'src> {
             Token::KwFalse => "`false`",
             Token::KwFun => "`fun`",
             Token::KwLet => "`let`",
+            Token::KwMatch => "`match`",
             Token::KwTrue => "`true`",
             Token::Underscore => "`_`",
             Token::ThinArrow => "`->`",

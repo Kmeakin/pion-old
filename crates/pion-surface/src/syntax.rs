@@ -45,6 +45,7 @@ pub enum Expr<'arena, Extra = ByteRange> {
     RecordLit(Extra, &'arena [ExprField<'arena, Extra>]),
     TupleLit(Extra, &'arena [Self]),
     RecordProj(Extra, &'arena Self, &'arena [(Extra, Symbol)]),
+    Match(Extra, &'arena Self, &'arena [MatchCase<'arena, Extra>]),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -63,6 +64,12 @@ pub struct TypeField<'arena, Extra = ByteRange> {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ExprField<'arena, Extra = ByteRange> {
     pub label: (Extra, Symbol),
+    pub expr: Expr<'arena, Extra>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct MatchCase<'arena, Extra = ByteRange> {
+    pub pat: Pat<'arena, Extra>,
     pub expr: Expr<'arena, Extra>,
 }
 
@@ -87,7 +94,8 @@ impl<'arena, Extra> Expr<'arena, Extra> {
             | Expr::RecordType(range, ..)
             | Expr::RecordLit(range, ..)
             | Expr::TupleLit(range, ..)
-            | Expr::RecordProj(range, ..) => range.clone(),
+            | Expr::RecordProj(range, ..)
+            | Expr::Match(range, ..) => range.clone(),
         }
     }
 }
