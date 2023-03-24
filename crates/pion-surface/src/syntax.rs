@@ -158,7 +158,7 @@ impl fmt::Display for Plicity {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Pat<'arena, Extra = ByteRange> {
     Paren(Extra, &'arena Self),
-    Lit(Extra, Lit),
+    Lit(Extra, Lit<Extra>),
     Ident(Extra, Symbol),
     Underscore(Extra),
 }

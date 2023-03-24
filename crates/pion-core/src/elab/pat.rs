@@ -58,12 +58,12 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             surface::Pat::Ident(range, name) => {
                 let source = MetaSource::PatType(*range);
                 let r#type = self.push_unsolved_type(source);
-                (Pat::Binder(Some(*name)), r#type)
+                (Pat::Ident(*name), r#type)
             }
             surface::Pat::Underscore(range) => {
                 let source = MetaSource::PatType(*range);
                 let r#type = self.push_unsolved_type(source);
-                (Pat::Binder(None), r#type)
+                (Pat::Ignore, r#type)
             }
         }
     }
@@ -71,8 +71,8 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
     pub fn check_pat(&mut self, pat: &surface::Pat, expected: &Type<'arena>) -> Pat<'arena> {
         match pat {
             surface::Pat::Paren(..) => self.check_pat(pat, expected),
-            surface::Pat::Ident(_, name) => Pat::Binder(Some(*name)),
-            surface::Pat::Underscore(_) => Pat::Binder(None),
+            surface::Pat::Ident(_, name) => Pat::Ident(*name),
+            surface::Pat::Underscore(_) => Pat::Ignore,
             surface::Pat::Lit(..) => {
                 let range = pat.range();
                 let (pat, r#type) = self.synth_pat(pat);

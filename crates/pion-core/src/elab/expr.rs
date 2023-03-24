@@ -56,9 +56,12 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 synth_error_expr()
             }
             surface::Expr::Let(_, (def, body)) => {
-                let def = self.synth_let_def(def);
-                let (body_expr, body_type) = self.synth(body);
-                self.local_env.pop();
+                let (def, type_value) = self.synth_let_def(def);
+                let expr_value = self.eval_env().eval(&def.expr);
+
+                let (body_expr, body_type) =
+                    self.with_def(def.name, type_value, expr_value, |this| this.synth(body));
+
                 (expr_builder.r#let(def, body_expr), body_type)
             }
             surface::Expr::Arrow(_, plicity, (domain, codomain)) => {
@@ -290,7 +293,11 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 }
                 (head_expr, head_type)
             }
-            surface::Expr::Match(..) => todo!(),
+            surface::Expr::Match(range, scrut, cases) => {
+                let r#type = self.push_unsolved_type(MetaSource::MatchType(*range));
+                let expr = self.check_match(*range, scrut, cases, &r#type);
+                (expr, r#type)
+            }
         }
     }
 
@@ -330,17 +337,14 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
         (expr, r#type)
     }
 
-    fn synth_let_def(&mut self, def: &surface::LetDef) -> LetDef<'arena> {
+    fn synth_let_def(&mut self, def: &surface::LetDef) -> (LetDef<'arena>, Type<'arena>) {
         let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
         let name = pat.name();
 
         let expr = self.check(&def.expr, &type_value);
-        let expr_value = self.eval_env().eval(&expr);
-
         let r#type = self.quote_env().quote(&type_value);
 
-        self.local_env.push_def(name, type_value, expr_value);
-        LetDef { name, r#type, expr }
+        (LetDef { name, r#type, expr }, type_value)
     }
 
     fn synth_fun_type(
@@ -460,9 +464,13 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             (surface::Expr::Error(_), _) => Expr::Error,
             (surface::Expr::Paren(_, expr), _) => self.check(expr, &expected),
             (surface::Expr::Let(_, (def, body)), _) => {
-                let def = self.synth_let_def(def);
-                let body = self.check(body, &expected);
-                self.local_env.pop();
+                let (def, type_value) = self.synth_let_def(def);
+                let expr_value = self.eval_env().eval(&def.expr);
+
+                let body = self.with_def(def.name, type_value, expr_value, |this| {
+                    this.check(body, &expected)
+                });
+
                 expr_builder.r#let(def, body)
             }
             (surface::Expr::FunLit(range, params, body), _) => {
@@ -513,6 +521,9 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 }
 
                 Expr::RecordLit(labels, self.scope.to_scope_from_iter(exprs))
+            }
+            (surface::Expr::Match(range, scrut, cases), _) => {
+                self.check_match(*range, scrut, cases, &expected)
             }
             _ => {
                 let (synth_expr, synth_type) = self.synth(expr);

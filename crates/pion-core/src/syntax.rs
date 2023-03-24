@@ -22,6 +22,11 @@ pub enum Expr<'arena> {
     RecordType(&'arena [Symbol], &'arena [Self]),
     RecordLit(&'arena [Symbol], &'arena [Self]),
     RecordProj(&'arena Self, Symbol),
+    Match(
+        &'arena Self,
+        &'arena [(Lit, Self)],
+        Option<(Option<Symbol>, &'arena Self)>,
+    ),
 }
 
 impl<'arena> Expr<'arena> {
@@ -92,6 +97,7 @@ pub enum Head {
 pub enum Elim<'arena> {
     FunApp(Plicity, Value<'arena>),
     RecordProj(Symbol),
+    Match(Cases<'arena, Lit>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,26 +129,67 @@ impl<'arena> Telescope<'arena> {
     pub fn len(&self) -> usize { self.exprs.len() }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cases<'arena, P> {
+    pub local_values: SharedEnv<Value<'arena>>,
+    pub pattern_cases: &'arena [(P, Expr<'arena>)],
+    pub default_case: Option<(Option<Symbol>, &'arena Expr<'arena>)>,
+}
+
+impl<'arena, P> Cases<'arena, P> {
+    pub fn new(
+        local_values: SharedEnv<Value<'arena>>,
+        pattern_cases: &'arena [(P, Expr<'arena>)],
+        default_case: Option<(Option<Symbol>, &'arena Expr<'arena>)>,
+    ) -> Self {
+        Self {
+            local_values,
+            pattern_cases,
+            default_case,
+        }
+    }
+}
+
+pub type PatternCase<'arena, P> = (P, Value<'arena>);
+
+#[derive(Debug, Clone)]
+pub enum SplitCases<'arena, P> {
+    Case(PatternCase<'arena, P>, Cases<'arena, P>),
+    Default(Option<Symbol>, Closure<'arena>),
+    None,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Pat<'arena> {
     Error(&'arena ()),
     Lit(Lit),
-    Binder(Option<Symbol>),
+    Ident(Symbol),
+    Ignore,
 }
 
 impl<'arena> Pat<'arena> {
     pub fn name(&self) -> Option<Symbol> {
         match self {
-            Pat::Binder(name) => *name,
+            Pat::Ident(name) => Some(*name),
             _ => None,
         }
     }
+
+    pub fn is_err(&self) -> bool { matches!(self, Self::Error(_)) }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Lit {
     Bool(bool),
     Int(u32),
+}
+impl Lit {
+    pub fn num_inhabitants(&self) -> Option<u128> {
+        match self {
+            Self::Bool(_) => Some(1 << 1),
+            Self::Int(_) => Some(1 << 32),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -153,7 +200,7 @@ mod tests {
 
     #[test]
     fn expr_size() {
-        assert_eq!(size_of::<Expr>(), 40);
+        assert_eq!(size_of::<Expr>(), 48);
     }
 
     #[test]
@@ -239,6 +286,19 @@ impl<'a, 'arena> Subexprs<'a, 'arena> {
                 }
             }
             Expr::RecordProj(head, ..) => self.helper(head, f)?,
+            Expr::Match(scrut, cases, default) => {
+                self.helper(scrut, f)?;
+
+                for (_, expr) in cases.iter() {
+                    self.helper(expr, f)?;
+                }
+
+                if let Some((_, default)) = default {
+                    self.env.push();
+                    self.helper(default, f)?;
+                    self.env.pop();
+                }
+            }
         }
 
         ControlFlow::Continue(())
