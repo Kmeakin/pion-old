@@ -1,0 +1,5 @@
+exit status: 0
+stdout:
+fun (x : Int) => match x {0 => 1, otherwise => otherwise} : Int -> Int
+
+stderr:

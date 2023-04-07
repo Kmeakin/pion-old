@@ -39,7 +39,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
     ) -> Expr<'arena> {
         match cases.split_first() {
             None => self.elab_match_absurd(info, is_reachable),
-            Some((case, cases)) => match self.check_pat(&case.pat, &info.expected_type) {
+            Some((case, cases)) => match self.check_pat(&case.pat, &info.scrut_type) {
                 Pat::Lit(lit) => {
                     self.check_pat_reachable(is_reachable, case.pat.range());
 
@@ -47,7 +47,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
 
                     let mut cases = cases.iter();
                     while let Some(case) = cases.next() {
-                        let pat = self.check_pat(&case.pat, &info.expected_type);
+                        let pat = self.check_pat(&case.pat, &info.scrut_type);
                         match pat {
                             Pat::Lit(lit) => {
                                 let body_expr = self.check(&case.expr, &info.expected_type);

@@ -1,0 +1,17 @@
+exit status: 0
+stdout:
+fun (x : Bool) => match x {false => 1, true => 0} : Bool -> Int
+
+stderr:
+warning: unreachable pattern
+  ┌─ tests/succeed/match/overlap.pion:6:5
+  │
+6 │     false => 1,
+  │     ^^^^^
+
+warning: unreachable pattern
+  ┌─ tests/succeed/match/overlap.pion:7:5
+  │
+7 │     true => 0,
+  │     ^^^^
+
