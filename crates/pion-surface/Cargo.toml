@@ -8,7 +8,7 @@ pion-source = { version = "0.1.0", path = "../pion-source" }
 
 lalrpop-util = "0.19.8"
 lexical = { version = "6.1.1", features = ["power-of-two", "format"] }
-logos = "0.12.1"
+logos = "0.13.0"
 scoped-arena = "0.4.1"
 ustr = "0.9.0"
 pretty = "0.12.0"
