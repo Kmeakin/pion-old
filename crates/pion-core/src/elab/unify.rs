@@ -170,6 +170,8 @@ pub enum SpineError {
     NonLocalFunApp,
     /// A record projection was found in the problem spine.
     RecordProj(Symbol),
+    /// A match was found in the problem spine.
+    Match,
 }
 
 /// An error that occurred when renaming the solution.
@@ -320,6 +322,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                     self.unify(arg1, arg2)?;
                 }
                 (Elim::RecordProj(label1), Elim::RecordProj(label2)) if label1 == label2 => {}
+                (Elim::Match(cases1), Elim::Match(cases2)) => self.unify_cases(cases1, cases2)?,
                 _ => return Err(UnifyError::Mismatch),
             }
         }
@@ -375,6 +378,37 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
 
         self.local_env.truncate(len);
         Ok(())
+    }
+
+    /// Unify two [cases][Cases].
+    fn unify_cases(
+        &mut self,
+        cases1: &Cases<'arena, Lit>,
+        cases2: &Cases<'arena, Lit>,
+    ) -> Result<(), UnifyError> {
+        let mut cases1 = cases1.clone();
+        let mut cases2 = cases2.clone();
+
+        loop {
+            match (
+                self.elim_env().split_cases(cases1),
+                self.elim_env().split_cases(cases2),
+            ) {
+                (
+                    SplitCases::Case((lit1, value1), next_cases1),
+                    SplitCases::Case((lit2, value2), next_cases2),
+                ) if lit1 == lit2 => {
+                    self.unify(&value1, &value2)?;
+                    cases1 = next_cases1;
+                    cases2 = next_cases2;
+                }
+                (SplitCases::Default(_, value1), SplitCases::Default(_, value2)) => {
+                    return self.unify_closures(&value1, &value2);
+                }
+                (SplitCases::None, SplitCases::None) => return Ok(()),
+                _ => return Err(UnifyError::Mismatch),
+            }
+        }
     }
 
     /// Unify a function literal with a value, using eta-conversion.
@@ -461,6 +495,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                     _ => return Err(SpineError::NonLocalFunApp),
                 },
                 Elim::RecordProj(label) => return Err(SpineError::RecordProj(*label)),
+                Elim::Match(_) => return Err(SpineError::Match),
             }
         }
         Ok(())
@@ -478,7 +513,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                     expr,
                 )
             }
-            Elim::RecordProj(_) => {
+            Elim::RecordProj(_) | Elim::Match(_) => {
                 unreachable!("should have been caught by `init_renaming`")
             }
         })
@@ -520,6 +555,27 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                         Ok(expr_builder.fun_app(*plicity, head, arg))
                     }
                     Elim::RecordProj(label) => Ok(expr_builder.record_proj(head, *label)),
+                    Elim::Match(cases) => {
+                        let mut cases = cases.clone();
+                        let mut pattern_cases = Vec::new();
+                        let default = loop {
+                            match self.elim_env().split_cases(cases) {
+                                SplitCases::Case((lit, expr), next_cases) => {
+                                    pattern_cases.push((lit, self.rename(meta_var, &expr)?));
+                                    cases = next_cases;
+                                }
+                                SplitCases::Default(name, expr) => {
+                                    break Some((name, self.rename_closure(meta_var, &expr)?))
+                                }
+                                SplitCases::None => break None,
+                            }
+                        };
+                        Ok(Expr::Match(
+                            self.scope.to_scope(head),
+                            self.scope.to_scope_from_iter(pattern_cases),
+                            default.map(|(name, expr)| (name, self.scope.to_scope(expr) as &_)),
+                        ))
+                    }
                 })
             }
             Value::FunType(plicity, name, domain, codomain) => {

@@ -89,6 +89,11 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 let head = self.eval(head);
                 self.elim_env.record_proj(head, *label)
             }
+            Expr::Match(scrut, cases, default) => {
+                let scrut = self.eval(scrut);
+                let cases = Cases::new(self.local_values.clone(), cases, *default);
+                self.elim_env.match_scrut(scrut, cases)
+            }
         }
     }
 
@@ -108,7 +113,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
             },
             // These exprs might be elimination spines with metavariables at
             // their head that need to be unfolded.
-            Expr::Meta(..) | Expr::FunApp(..) | Expr::RecordProj(..) => {
+            Expr::Meta(..) | Expr::FunApp(..) | Expr::RecordProj(..) | Expr::Match(..) => {
                 match self.zonk_meta_var_spines(expr) {
                     Left(expr) => expr,
                     Right(value) => self.quote_env().quote(&value),
@@ -120,23 +125,17 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                     r#type: self.zonk(&def.r#type),
                     expr: self.zonk(&def.expr),
                 };
-                (self.local_values).push(Value::local(self.local_values.len().to_level()));
-                let body = self.zonk(body);
-                self.local_values.pop();
+                let body = self.zonk_with_local(body);
                 expr_builder.r#let(def, body)
             }
             Expr::FunType(plicity, name, (domain, codomain)) => {
                 let domain = self.zonk(domain);
-                (self.local_values).push(Value::local(self.local_values.len().to_level()));
-                let codomain = self.zonk(codomain);
-                self.local_values.pop();
+                let codomain = self.zonk_with_local(codomain);
                 expr_builder.fun_type(*plicity, *name, domain, codomain)
             }
             Expr::FunLit(plicity, name, (domain, body)) => {
                 let domain = self.zonk(domain);
-                (self.local_values).push(Value::local(self.local_values.len().to_level()));
-                let body = self.zonk(body);
-                self.local_values.pop();
+                let body = self.zonk_with_local(body);
                 expr_builder.fun_lit(*plicity, *name, domain, body)
             }
             Expr::RecordType(labels, types) => {
@@ -157,6 +156,13 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                     .to_scope_from_iter(exprs.iter().map(|expr| self.zonk(expr))),
             ),
         }
+    }
+
+    fn zonk_with_local(&mut self, expr: &Expr<'arena>) -> Expr<'arena> {
+        (self.local_values).push(Value::local(self.local_values.len().to_level()));
+        let ret = self.zonk(expr);
+        self.local_values.pop();
+        ret
     }
 
     /// Unfold elimination spines with solved metavariables at their head.
@@ -187,6 +193,21 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
             Expr::RecordProj(head, label) => match self.zonk_meta_var_spines(head) {
                 Left(head) => Left(expr_builder.record_proj(head, *label)),
                 Right(head_value) => Right(self.elim_env.record_proj(head_value, *label)),
+            },
+            Expr::Match(scrut, cases, default) => match self.zonk_meta_var_spines(scrut) {
+                Left(scrut) => Left(Expr::Match(
+                    self.scope.to_scope(scrut),
+                    self.scope.to_scope_from_iter(
+                        cases.iter().map(|(lit, expr)| (*lit, self.zonk(expr))),
+                    ),
+                    default.map(|(name, expr)| {
+                        (name, self.scope.to_scope(self.zonk_with_local(expr)) as &_)
+                    }),
+                )),
+                Right(scrut) => {
+                    let cases = Cases::new(self.local_values.clone(), cases, *default);
+                    Right(self.elim_env.match_scrut(scrut, cases))
+                }
             },
             expr => Left(self.zonk(expr)),
         }
@@ -256,6 +277,7 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
         spine.iter().fold(head, |head, elim| match elim {
             Elim::FunApp(plicity, arg) => self.fun_app(*plicity, head, arg.clone()),
             Elim::RecordProj(label) => self.record_proj(head, *label),
+            Elim::Match(cases) => self.match_scrut(head, cases.clone()),
         })
     }
 
@@ -291,6 +313,34 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
         }
     }
 
+    pub fn match_scrut(
+        &self,
+        scrut: Value<'arena>,
+        mut cases: Cases<'arena, Lit>,
+    ) -> Value<'arena> {
+        match scrut {
+            Value::Lit(lit) => {
+                for (pat_lit, expr) in cases.pattern_cases {
+                    if lit == *pat_lit {
+                        return self.eval_env(&mut cases.local_values).eval(expr);
+                    }
+                }
+                match cases.default_case {
+                    Some((_, expr)) => {
+                        cases.local_values.push(scrut);
+                        self.eval_env(&mut cases.local_values).eval(expr)
+                    }
+                    None => panic!("Bad scrut match: inexhaustive cases"),
+                }
+            }
+            Value::Stuck(head, mut spine) => {
+                spine.push(Elim::Match(cases));
+                Value::Stuck(head, spine)
+            }
+            _ => panic!("Bad scrut match: {scrut:?} {cases:?}"),
+        }
+    }
+
     pub fn apply_closure(
         &self,
         mut closure: Closure<'arena>,
@@ -314,6 +364,19 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
             telescope.exprs = exprs;
             telescope
         }))
+    }
+
+    pub fn split_cases(&self, mut cases: Cases<'arena, Lit>) -> SplitCases<'arena, Lit> {
+        match cases.pattern_cases.split_first() {
+            Some(((pat, expr), pattern_cases)) => {
+                cases.pattern_cases = pattern_cases;
+                SplitCases::Case(
+                    (*pat, self.eval_env(&mut cases.local_values).eval(expr)),
+                    cases,
+                )
+            }
+            None => todo!(),
+        }
     }
 }
 
@@ -354,6 +417,27 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
                         expr_builder.fun_app(*plicity, head, self.quote(arg))
                     }
                     Elim::RecordProj(label) => expr_builder.record_proj(head, *label),
+                    Elim::Match(cases) => {
+                        let mut cases = cases.clone();
+                        let mut pattern_cases = Vec::new();
+                        let default = loop {
+                            match self.elim_env.split_cases(cases) {
+                                SplitCases::Case((lit, expr), next_cases) => {
+                                    pattern_cases.push((lit, self.quote(&expr)));
+                                    cases = next_cases;
+                                }
+                                SplitCases::Default(name, expr) => {
+                                    break Some((name, self.quote_closure(&expr)))
+                                }
+                                SplitCases::None => break None,
+                            }
+                        };
+                        Expr::Match(
+                            self.scope.to_scope(head),
+                            self.scope.to_scope_from_iter(pattern_cases),
+                            default.map(|(name, expr)| (name, self.scope.to_scope(expr) as &_)),
+                        )
+                    }
                 })
             }
             Value::FunType(plicity, name, domain, codomain) => {

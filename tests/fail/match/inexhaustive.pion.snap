@@ -1,0 +1,15 @@
+exit status: 0
+stdout:
+fun (x : Bool) => match x {false => 1, _ => #error} : Bool -> Int
+
+stderr:
+error: inexhaustive match expression
+  ┌─ tests/fail/match/inexhaustive.pion:3:25
+  │  
+3 │   fun (x : Bool) => match x {
+  │                           ^ patterns not covered
+  │ ╭───────────────────'
+4 │ │     false => 1,
+5 │ │ }
+  │ ╰─' in match expression
+

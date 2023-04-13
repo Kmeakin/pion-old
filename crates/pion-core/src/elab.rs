@@ -11,6 +11,7 @@ use crate::semantics::{ElimEnv, EvalEnv, QuoteEnv};
 use crate::syntax::*;
 
 mod expr;
+mod r#match;
 mod pat;
 pub mod unify;
 
@@ -138,6 +139,19 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
         mut f: impl FnMut(&mut Self) -> T,
     ) -> T {
         self.local_env.push_param(name, r#type);
+        let result = f(self);
+        self.local_env.pop();
+        result
+    }
+
+    fn with_def<T>(
+        &mut self,
+        name: Option<Symbol>,
+        r#type: Type<'arena>,
+        value: Value<'arena>,
+        mut f: impl FnMut(&mut Self) -> T,
+    ) -> T {
+        self.local_env.push_def(name, r#type, value);
         let result = f(self);
         self.local_env.pop();
         result
@@ -281,4 +295,6 @@ pub enum MetaSource {
     PatType(ByteRange),
 
     ImplicitArg(ByteRange, Option<Symbol>),
+
+    MatchType(ByteRange),
 }

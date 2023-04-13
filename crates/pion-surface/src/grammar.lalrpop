@@ -26,6 +26,7 @@ extern {
         "false" => Token::KwFalse,
         "fun" => Token::KwFun,
         "let" => Token::KwLet,
+        "match" => Token::KwMatch,
         "true" => Token::KwTrue,
 
         "_" => Token::Underscore,
@@ -89,6 +90,7 @@ AtomExpr: Expr<'arena> = {
     <start: @L> "{" "}" <end: @R> => Expr::TupleLit(ByteRange::new(start, end), &[]),
     <start: @L> "{" <fields: Seq1<TypeField, ",">> "}" <end: @R> => Expr::RecordType(ByteRange::new(start, end), fields),
     <start: @L> "{" <fields: Seq1<ExprField, ",">> "}" <end: @R> => Expr::RecordLit(ByteRange::new(start, end), fields),
+    <start: @L> "match" <scrut: ProjExpr> "{" <cases: Seq<MatchCase, ",">> "}" <end: @R> => Expr::Match(ByteRange::new(start, end), scope.to_scope(scrut), cases),
 }
 
 TypeField: TypeField<'arena> = {
@@ -97,6 +99,10 @@ TypeField: TypeField<'arena> = {
 
 ExprField: ExprField<'arena> = {
     <label: RangeIdent> "=" <expr: Expr> => ExprField {label, expr},
+}
+
+MatchCase: MatchCase<'arena> = {
+    <pat: Pat> "=>" <expr: Expr> => MatchCase {pat, expr},
 }
 
 Param: Param<'arena> = {

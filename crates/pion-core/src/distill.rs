@@ -285,6 +285,25 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let labels = self.scope.to_scope_from_iter(labels.into_iter().rev());
                 builder.record_proj((), head, labels)
             }
+            Expr::Match(scrut, cases, default) => {
+                let scope = self.scope;
+                let scrut = self.expr_prec(Prec::Proj, scrut);
+                let default = default.map(|(name, expr)| {
+                    let name = self.freshen_name(name, expr);
+                    self.push_local(name);
+                    let expr = self.expr(expr);
+                    self.pop_local();
+                    let pat = name_to_pat(name);
+                    surface::MatchCase { pat, expr }
+                });
+                let cases = cases.iter().map(|(literal, expr)| {
+                    let pat = surface::Pat::Lit((), lit(*literal));
+                    let expr = self.expr(expr);
+                    surface::MatchCase { pat, expr }
+                });
+                let cases = scope.to_scope_from_iter(cases.chain(default));
+                surface::Expr::Match((), self.scope.to_scope(scrut), cases)
+            }
         }
     }
 }

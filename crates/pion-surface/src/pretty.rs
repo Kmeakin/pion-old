@@ -84,6 +84,17 @@ impl<'arena> PrettyCtx<'arena> {
             Expr::RecordProj(_, head, labels) => self.expr(head).append(self.concat(
                 (labels.iter()).map(|(_, label)| self.text(".").append(self.ident(*label))),
             )),
+            Expr::Match(_, scrut, cases) => self.sequence(
+                false,
+                self.text("match ").append(self.expr(scrut)).append(" {"),
+                cases.iter().map(|case| {
+                    self.pat(&case.pat)
+                        .append(" => ")
+                        .append(self.expr(&case.expr))
+                }),
+                self.text(","),
+                self.text("}"),
+            ),
         }
     }
 

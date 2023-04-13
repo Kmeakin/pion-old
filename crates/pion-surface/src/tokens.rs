@@ -6,12 +6,9 @@ use crate::reporting::TokenError;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Logos)]
 #[rustfmt::skip]
+#[logos(skip r"\s+")]
+#[logos(skip r"//[^\n]*")]
 pub enum Token<'src> {
-    #[error]
-    #[regex(r"\s+", logos::skip)]
-    #[regex(r"//[^\n]*", logos::skip)]
-    Error,
-
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")]
     Ident(&'src str),
 
@@ -26,6 +23,7 @@ pub enum Token<'src> {
     #[token("false")] KwFalse,
     #[token("fun")]   KwFun,
     #[token("let")]   KwLet,
+    #[token("match")] KwMatch,
     #[token("true")]  KwTrue,
 
     #[token("_")]  Underscore,
@@ -42,10 +40,10 @@ pub enum Token<'src> {
     #[token("=")]  Eq,
     #[token("=>")] FatArrow,
 }
+
 impl<'src> Token<'src> {
     pub const fn description(&self) -> &'static str {
         match self {
-            Token::Error => "unknown token",
             Token::Ident(_) => "identifier",
             Token::Hole(_) => "hole",
             Token::DecInt(_) => "decimal integer",
@@ -55,6 +53,7 @@ impl<'src> Token<'src> {
             Token::KwFalse => "`false`",
             Token::KwFun => "`fun`",
             Token::KwLet => "`let`",
+            Token::KwMatch => "`match`",
             Token::KwTrue => "`true`",
             Token::Underscore => "`_`",
             Token::ThinArrow => "`->`",
@@ -80,8 +79,8 @@ pub fn tokens(
         let start = BytePos::truncate(range.start);
         let end = BytePos::truncate(range.end);
         match token {
-            Token::Error => Err(TokenError::Unknown(ByteRange::new(start, end))),
-            _ => Ok((start, token, end)),
+            Ok(token) => Ok((start, token, end)),
+            Err(_) => Err(TokenError::Unknown(ByteRange::new(start, end))),
         }
     })
 }

@@ -1,0 +1,8 @@
+//~ run = "${PION} elab ${FILE}"
+
+fun (x : Bool) => match x {
+    false => 1,
+    true => 0,
+    false => 1,
+    true => 0,
+}

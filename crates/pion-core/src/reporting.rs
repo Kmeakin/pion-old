@@ -58,6 +58,13 @@ pub enum ElabError {
         expected: String,
         error: UnifyError,
     },
+    UnreachablePat {
+        range: ByteRange,
+    },
+    InexhaustiveMatch {
+        range: ByteRange,
+        scrut_range: ByteRange,
+    },
 }
 
 impl ElabError {
@@ -183,7 +190,8 @@ impl ElabError {
                         SpineError::NonLocalFunApp => {
                             "non-variable function application in problem spine"
                         }
-                        SpineError::RecordProj(_) => "record projetion found in problem spine",
+                        SpineError::RecordProj(_) => "record projection found in problem spine",
+                        SpineError::Match => "pattern match found in problem spine",
                     };
                     Diagnostic::error()
                         .with_message(message)
@@ -205,16 +213,25 @@ impl ElabError {
                     MetaSource::HoleExpr(range, _) => (range, "hole expression"),
                     MetaSource::PatType(range) => (range, "pattern type"),
                     MetaSource::ImplicitArg(range, _) => (range, "implicit argument"),
+                    MetaSource::MatchType(range) => (range, "type of match expression"),
 
                     // should be impossible
                     MetaSource::HoleType(range, _) => (range, "hole type"),
                     MetaSource::PlaceholderType(range) => (range, "placeholder type"),
                 };
-
                 Diagnostic::error()
                     .with_message(format!("unable to infer {name}"))
                     .with_labels(vec![primary_label(range)])
             }
+            Self::UnreachablePat { range } => Diagnostic::warning()
+                .with_message("unreachable pattern")
+                .with_labels(vec![primary_label(range)]),
+            Self::InexhaustiveMatch { range, scrut_range } => Diagnostic::error()
+                .with_message("inexhaustive match expression")
+                .with_labels(vec![
+                    primary_label(scrut_range).with_message("patterns not covered"),
+                    secondary_label(range).with_message("in match expression"),
+                ]),
         }
     }
 }
