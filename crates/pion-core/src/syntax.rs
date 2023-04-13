@@ -343,4 +343,18 @@ impl<'arena> ExprBuilder<'arena> {
     pub fn record_proj(&self, head: Expr<'arena>, label: Symbol) -> Expr<'arena> {
         Expr::RecordProj(self.scope.to_scope(head), label)
     }
+
+    pub fn if_then_else(
+        &self,
+        cond: Expr<'arena>,
+        then: Expr<'arena>,
+        r#else: Expr<'arena>,
+    ) -> Expr<'arena> {
+        Expr::Match(
+            self.scope.to_scope(cond),
+            self.scope
+                .to_scope_from_iter([(Lit::Bool(false), r#else), (Lit::Bool(true), then)]),
+            None,
+        )
+    }
 }
