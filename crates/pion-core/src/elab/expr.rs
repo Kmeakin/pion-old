@@ -298,6 +298,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let expr = self.check_match(*range, scrut, cases, &r#type);
                 (expr, r#type)
             }
+            surface::Expr::If(range, (cond, then, r#else)) => todo!(),
         }
     }
 
@@ -525,6 +526,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             (surface::Expr::Match(range, scrut, cases), _) => {
                 self.check_match(*range, scrut, cases, &expected)
             }
+            (surface::Expr::If(range, (cond, then, r#else)), _) => todo!(),
             _ => {
                 let (synth_expr, synth_type) = self.synth(expr);
                 self.convert(expr.range(), synth_expr, &synth_type, &expected)

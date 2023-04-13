@@ -95,6 +95,7 @@ impl<'arena> PrettyCtx<'arena> {
                 self.text(","),
                 self.text("}"),
             ),
+            Expr::If(_, (cond, then, r#else)) => todo!(),
         }
     }
 
