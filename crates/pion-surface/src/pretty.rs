@@ -14,6 +14,7 @@ type DocBuilder<'arena> = pretty::DocBuilder<'arena, PrettyCtx<'arena>>;
 impl<'arena> PrettyCtx<'arena> {
     pub fn new(scope: &'arena Scope<'arena>) -> Self { Self { scope } }
 
+    #[allow(clippy::too_many_lines)]
     pub fn expr<Extra>(&'arena self, expr: &Expr<'_, Extra>) -> DocBuilder<'arena> {
         match expr {
             Expr::Error(_) => self.text("#error"),
@@ -95,6 +96,38 @@ impl<'arena> PrettyCtx<'arena> {
                 self.text(","),
                 self.text("}"),
             ),
+            Expr::If(_, (cond, then, r#else)) => {
+                let mut r#else = r#else;
+                let mut branches = Vec::new();
+                while let Expr::If(_, (cond, then, next_else)) = r#else {
+                    branches.push((cond, then));
+                    r#else = next_else;
+                }
+
+                self.text("if ")
+                    .append(self.expr(cond))
+                    .append(
+                        self.line()
+                            .append(self.text("then "))
+                            .append(self.expr(then))
+                            .nest(INDENT),
+                    )
+                    .append(self.concat(branches.iter().map(|(cond_expr, then_expr)| {
+                        self.line()
+                            .append("else if ")
+                            .append(self.expr(cond_expr))
+                            .append(" then ")
+                            .append(self.expr(then_expr))
+                            .nest(INDENT)
+                    })))
+                    .append(
+                        self.line()
+                            .append(self.text("else "))
+                            .append(self.expr(r#else))
+                            .nest(INDENT),
+                    )
+                    .group()
+            }
         }
     }
 

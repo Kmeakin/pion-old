@@ -23,10 +23,13 @@ extern {
         "HexInt" => Token::HexInt(<&'source str>),
 
         "def" => Token::KwDef,
+        "else" => Token::KwElse,
         "false" => Token::KwFalse,
         "fun" => Token::KwFun,
+        "if" => Token::KwIf,
         "let" => Token::KwLet,
         "match" => Token::KwMatch,
+        "then" => Token::KwThen,
         "true" => Token::KwTrue,
 
         "_" => Token::Underscore,
@@ -56,6 +59,7 @@ pub Expr: Expr<'arena> = {
 
 LetExpr: Expr<'arena> = {
     <start: @L> "let" <def: LetDef> ";" <body: LetExpr> <end: @R> => builder.r#let((start, end), def, body),
+    <start: @L> "if" <cond: LetExpr> "then" <then: LetExpr> "else" <r#else: LetExpr> <end: @R> => builder.if_then_else((start, end), cond, then, r#else),
     FunExpr => <>,
 }
 
