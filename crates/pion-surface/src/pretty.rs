@@ -87,7 +87,7 @@ impl<'arena> PrettyCtx<'arena> {
                 self.text(","),
                 self.text("}"),
             ),
-            Expr::TupleLit(_, exprs) => self.tuple(exprs),
+            Expr::TupleLit(_, exprs) => self.tuple(exprs, |expr| self.expr(expr)),
             Expr::RecordProj(_, head, labels) => self.expr(head).append(self.concat(
                 (labels.iter()).map(|(_, label)| self.text(".").append(self.ident(*label))),
             )),
@@ -206,19 +206,33 @@ impl<'arena> PrettyCtx<'arena> {
             Pat::Lit(.., lit) => self.lit(lit),
             Pat::Ident(.., name) => self.text(name.as_str()),
             Pat::Underscore(_) => self.text("_"),
-            Pat::RecordLit(..) => todo!(),
-            Pat::TupleLit(..) => todo!(),
+            Pat::RecordLit(.., fields) => self.sequence(
+                true,
+                self.text("{"),
+                fields.iter().map(|field| {
+                    self.ident(field.label.1)
+                        .append(" = ")
+                        .append(self.pat(&field.pat))
+                }),
+                self.text(","),
+                self.text("}"),
+            ),
+            Pat::TupleLit(.., pats) => self.tuple(pats, |pat| self.pat(pat)),
         }
     }
 
-    fn tuple<Extra>(&'arena self, exprs: &[Expr<'_, Extra>]) -> DocBuilder<'arena> {
-        if exprs.len() == 1 {
-            self.text("(").append(self.expr(&exprs[0]).append(",)"))
+    fn tuple<T>(
+        &'arena self,
+        elems: &[T],
+        pretty: impl Fn(&T) -> DocBuilder<'arena>,
+    ) -> DocBuilder<'arena> {
+        if elems.len() == 1 {
+            self.text("(").append(pretty(&elems[0]).append(",)"))
         } else {
             self.sequence(
                 false,
                 self.text("("),
-                exprs.iter().map(|expr| self.expr(expr)),
+                elems.iter().map(pretty),
                 self.text(","),
                 self.text(")"),
             )
