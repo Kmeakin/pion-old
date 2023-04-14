@@ -161,10 +161,11 @@ pub enum SplitCases<'arena, P> {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Pat<'arena> {
-    Error(&'arena ()),
-    Lit(Lit),
-    Ident(Symbol),
+    Error,
     Ignore,
+    Ident(Symbol),
+    Lit(Lit),
+    RecordLit(&'arena [Symbol], &'arena [Self]),
 }
 
 impl<'arena> Pat<'arena> {
@@ -175,7 +176,7 @@ impl<'arena> Pat<'arena> {
         }
     }
 
-    pub fn is_err(&self) -> bool { matches!(self, Self::Error(_)) }
+    pub fn is_err(&self) -> bool { matches!(self, Self::Error) }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

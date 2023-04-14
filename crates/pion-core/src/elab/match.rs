@@ -77,7 +77,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                                 }
                             }
 
-                            Pat::Ident(_) | Pat::Ignore | Pat::Error(_) => {
+                            Pat::Ident(_) | Pat::Ignore | Pat::Error => {
                                 let name = pat.name();
                                 let range = case.pat.range();
 
@@ -97,6 +97,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                                     Some((name, self.scope.to_scope(default))),
                                 );
                             }
+                            Pat::RecordLit(..) => todo!(),
                         }
                     }
 
@@ -141,11 +142,12 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 }
                 // If we hit an error, propagate it, while still checking
                 // the body expression and the subsequent branches.
-                Pat::Error(..) => {
+                Pat::Error => {
                     self.check(&case.expr, &info.expected_type);
                     self.elab_match_unreachable(info, cases);
                     Expr::Error
                 }
+                Pat::RecordLit(..) => todo!(),
             },
         }
     }

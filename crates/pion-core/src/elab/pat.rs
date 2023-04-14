@@ -41,7 +41,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                             found,
                             expected,
                         });
-                        Pat::Error(&())
+                        Pat::Error
                     }
                 }
             }
@@ -65,8 +65,65 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let r#type = self.push_unsolved_type(source);
                 (Pat::Ignore, r#type)
             }
-            surface::Pat::RecordLit(..) => todo!(),
-            surface::Pat::TupleLit(..) => todo!(),
+            surface::Pat::RecordLit(_, fields) => {
+                let mut labels = Vec::with_capacity(fields.len());
+                let mut pats = Vec::with_capacity(fields.len());
+                let mut types = Vec::with_capacity(fields.len());
+
+                for field in fields.iter() {
+                    let (pat, type_value) = self.synth_pat(&field.pat);
+                    let r#type = self.quote_env().quote(&type_value);
+
+                    let (label_range, label) = field.label;
+                    if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
+                        self.emit_error(ElabError::RecordFieldDuplicate {
+                            name: "record literal",
+                            label,
+                            first_range: *first_range,
+                            duplicate_range: label_range,
+                        });
+                    } else {
+                        labels.push((label_range, label));
+                        pats.push(pat);
+                        types.push(r#type);
+                    }
+                }
+
+                let labels = self
+                    .scope
+                    .to_scope_from_iter(labels.iter().map(|(_, label)| *label));
+                let pats = self.scope.to_scope_from_iter(pats);
+                let types = self.scope.to_scope_from_iter(types);
+
+                let telescope = Telescope::new(self.local_env.values.clone(), types);
+                (
+                    Pat::RecordLit(labels, pats),
+                    Value::RecordType(labels, telescope),
+                )
+            }
+            surface::Pat::TupleLit(_, elems) => {
+                let mut labels = Vec::with_capacity(elems.len());
+                let mut pats = Vec::with_capacity(elems.len());
+                let mut types = Vec::with_capacity(elems.len());
+
+                for (idx, pat) in elems.iter().enumerate() {
+                    let (pat, type_value) = self.synth_pat(pat);
+                    let r#type = self.quote_env().quote(&type_value);
+                    labels.push(Symbol::from(&format!("_{idx}")));
+                    pats.push(pat);
+                    types.push(r#type);
+                }
+
+                let labels = self.scope.to_scope_from_iter(labels);
+                let pats = self.scope.to_scope_from_iter(pats);
+                let types = self.scope.to_scope_from_iter(types);
+
+                let telescope = Telescope::new(self.local_env.values.clone(), types);
+                (
+                    Pat::RecordLit(labels, pats),
+                    Value::RecordType(labels, telescope),
+                )
+            }
         }
     }
 
@@ -75,13 +132,11 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
             surface::Pat::Paren(..) => self.check_pat(pat, expected),
             surface::Pat::Ident(_, name) => Pat::Ident(*name),
             surface::Pat::Underscore(_) => Pat::Ignore,
-            surface::Pat::Lit(..) => {
+            _ => {
                 let range = pat.range();
                 let (pat, r#type) = self.synth_pat(pat);
                 self.convert_pat(range, pat, &r#type, expected)
             }
-            surface::Pat::RecordLit(..) => todo!(),
-            surface::Pat::TupleLit(..) => todo!(),
         }
     }
 
@@ -103,7 +158,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                     expected,
                     error,
                 });
-                Pat::Error(&())
+                Pat::Error
             }
         }
     }
