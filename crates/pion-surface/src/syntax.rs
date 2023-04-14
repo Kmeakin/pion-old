@@ -69,6 +69,12 @@ pub struct ExprField<'arena, Extra = ByteRange> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct PatField<'arena, Extra = ByteRange> {
+    pub label: (Extra, Symbol),
+    pub pat: Pat<'arena, Extra>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct MatchCase<'arena, Extra = ByteRange> {
     pub pat: Pat<'arena, Extra>,
     pub expr: Expr<'arena, Extra>,
@@ -163,6 +169,8 @@ pub enum Pat<'arena, Extra = ByteRange> {
     Lit(Extra, Lit<Extra>),
     Ident(Extra, Symbol),
     Underscore(Extra),
+    RecordLit(Extra, &'arena [PatField<'arena, Extra>]),
+    TupleLit(Extra, &'arena [Self]),
 }
 
 impl<'arena, Extra> Pat<'arena, Extra> {
@@ -174,7 +182,9 @@ impl<'arena, Extra> Pat<'arena, Extra> {
             Pat::Paren(range, ..)
             | Pat::Lit(range, ..)
             | Pat::Ident(range, ..)
-            | Pat::Underscore(range, ..) => range.clone(),
+            | Pat::Underscore(range, ..)
+            | Pat::RecordLit(range, ..)
+            | Pat::TupleLit(range, ..) => range.clone(),
         }
     }
 }

@@ -206,6 +206,8 @@ impl<'arena> PrettyCtx<'arena> {
             Pat::Lit(.., lit) => self.lit(lit),
             Pat::Ident(.., name) => self.text(name.as_str()),
             Pat::Underscore(_) => self.text("_"),
+            Pat::RecordLit(..) => todo!(),
+            Pat::TupleLit(..) => todo!(),
         }
     }
 

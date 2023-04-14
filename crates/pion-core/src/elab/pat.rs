@@ -65,6 +65,8 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let r#type = self.push_unsolved_type(source);
                 (Pat::Ignore, r#type)
             }
+            surface::Pat::RecordLit(..) => todo!(),
+            surface::Pat::TupleLit(..) => todo!(),
         }
     }
 
@@ -78,6 +80,8 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let (pat, r#type) = self.synth_pat(pat);
                 self.convert_pat(range, pat, &r#type, expected)
             }
+            surface::Pat::RecordLit(..) => todo!(),
+            surface::Pat::TupleLit(..) => todo!(),
         }
     }
 
