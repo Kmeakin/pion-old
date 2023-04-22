@@ -16,17 +16,17 @@ mod pat;
 pub mod unify;
 
 /// Elaboration context.
-pub struct ElabCtx<'arena, E: FnMut(ElabError)> {
+pub struct ElabCtx<'arena, 'error> {
     scope: &'arena Scope<'arena>,
     prim_env: PrimEnv<'arena>,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
-    on_error: E,
+    on_error: &'error mut dyn FnMut(ElabError),
 }
 
-impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
-    pub fn new(scope: &'arena Scope<'arena>, on_error: E) -> Self {
+impl<'arena, 'error> ElabCtx<'arena, 'error> {
+    pub fn new(scope: &'arena Scope<'arena>, on_error: &'error mut dyn FnMut(ElabError)) -> Self {
         Self {
             scope,
             prim_env: PrimEnv::new(),

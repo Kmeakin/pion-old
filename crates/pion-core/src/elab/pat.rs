@@ -3,7 +3,7 @@ use pion_source::location::ByteRange;
 use super::expr::synth_lit;
 use super::*;
 
-impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
+impl<'arena, 'error> ElabCtx<'arena, 'error> {
     pub fn synth_ann_pat(
         &mut self,
         pat: &surface::Pat,

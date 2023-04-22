@@ -3,7 +3,7 @@ use pion_surface::syntax::Plicity;
 
 use super::*;
 
-impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
+impl<'arena, 'error> ElabCtx<'arena, 'error> {
     /// Synthesize the type of the given surface expr.
     ///
     /// Returns the elaborated expr in the core language and its type.

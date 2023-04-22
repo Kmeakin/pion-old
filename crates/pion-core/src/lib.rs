@@ -21,4 +21,4 @@ pub mod semantics;
 pub mod syntax;
 
 mod env;
-mod reporting;
+pub mod reporting;

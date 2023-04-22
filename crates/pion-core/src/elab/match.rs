@@ -12,7 +12,7 @@ struct MatchInfo<'arena> {
     scrut_expr: Expr<'arena>,
 }
 
-impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
+impl<'arena, 'error> ElabCtx<'arena, 'error> {
     pub fn check_match(
         &mut self,
         range: ByteRange,
