@@ -244,7 +244,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                 let mut head_range = head.range();
                 let (mut head_expr, mut head_type) = self.synth_and_insert_implicit_apps(head);
 
-                for (label_range, proj_label) in labels.iter() {
+                'labels: for (label_range, proj_label) in labels.iter() {
                     head_type = self.elim_env().update_metas(&head_type);
                     match &head_type {
                         _ if head_expr.is_error() || head_type.is_error() => {
@@ -262,7 +262,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                                     head_range = ByteRange::merge(head_range, *label_range);
                                     head_expr = expr_builder.record_proj(head_expr, *proj_label);
                                     head_type = r#type;
-                                    continue;
+                                    continue 'labels;
                                 }
 
                                 let head_value = self.eval_env().eval(&head_expr);
@@ -290,6 +290,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                         label_range: *label_range,
                         label: *proj_label,
                     });
+                    return synth_error_expr();
                 }
                 (head_expr, head_type)
             }
@@ -502,7 +503,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
                         labels.push(label);
                         types.push(r#type);
                         let type_value = this.eval_env().eval(&r#type);
-                        this.local_env.push_param(Some(label), type_value);
+                        this.local_env.push_param(None, type_value);
                     }
                 });
                 let labels = self.scope.to_scope_from_iter(labels);
