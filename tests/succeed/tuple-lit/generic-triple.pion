@@ -1,0 +1,6 @@
+//~ run = "${PION} elab ${FILE}"
+
+let get1 = fun (A: Type) (B: Type) (C: Type) (p: {_0: A, _1: B, _2: C}) => p._0;
+let get2 = fun (A: Type) (B: Type) (C: Type) (p: (A, B, C)) => p._1;
+let get3 = fun (A: Type) (B: Type) (C: Type) (p: (A, B, C)) => p._2;
+{}
