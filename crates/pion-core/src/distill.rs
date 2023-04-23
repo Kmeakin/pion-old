@@ -235,9 +235,16 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 self.paren(prec > Prec::App, builder.fun_app((), fun, args))
             }
             Expr::RecordType(labels, types) if is_tuple_telescope(labels, types) => {
-                let scope = self.scope;
-                let types = types.iter().map(|r#type| self.expr(r#type));
-                surface::Expr::TupleLit((), scope.to_scope_from_iter(types))
+                let initial_len = self.local_len();
+                let types = (self.scope).to_scope_from_iter(labels.iter().zip(types.iter()).map(
+                    |(label, r#type)| {
+                        let expr = self.expr_prec(Prec::Top, r#type);
+                        self.push_local(Some(*label));
+                        expr
+                    },
+                ));
+                self.truncate_local(initial_len);
+                surface::Expr::TupleLit((), types)
             }
             Expr::RecordType(labels, types) => {
                 let scope = self.scope;
