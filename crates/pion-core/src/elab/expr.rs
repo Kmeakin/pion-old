@@ -2,6 +2,7 @@ use pion_source::location::ByteRange;
 use pion_surface::syntax::Plicity;
 
 use super::*;
+use crate::elab::r#match::{Body, PatMatrix, Scrut};
 
 impl<'arena, 'error> ElabCtx<'arena, 'error> {
     /// Synthesize the type of the given surface expr.
@@ -56,13 +57,26 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                 synth_error_expr()
             }
             surface::Expr::Let(_, (def, body)) => {
-                let (def, type_value) = self.synth_let_def(def);
-                let expr_value = self.eval_env().eval(&def.expr);
+                let range = def.pat.range();
+                let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
+                let def_expr = self.check(&def.expr, &type_value);
+                let def_value = self.eval_env().eval(&def_expr);
+                let scrut = Scrut::new(def_expr, type_value);
 
-                let (body_expr, body_type) =
-                    self.with_def(def.name, type_value, expr_value, |this| this.synth(body));
+                let (defs, body_expr, body_type) = self.with_scope(|this| {
+                    let defs = this.push_def_pat(&pat, &scrut, &def_value);
+                    let (body_expr, body_type) = this.synth(body);
+                    (defs, body_expr, body_type)
+                });
 
-                (expr_builder.r#let(def, body_expr), body_type)
+                let expr = self.elab_match(
+                    PatMatrix::singleton(scrut, pat),
+                    &[Body::new(body_expr, defs)],
+                    range,
+                    range,
+                );
+
+                (expr, body_type)
             }
             surface::Expr::Arrow(_, plicity, (domain, codomain)) => {
                 let domain = self.check(domain, &Type::TYPE);
@@ -312,7 +326,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
 
     /// Synthesize the type of `expr`, wrapping it in fresh implicit
     /// applications if the term was not an implicit function literal.
-    fn synth_and_insert_implicit_apps(
+    pub fn synth_and_insert_implicit_apps(
         &mut self,
         expr: &surface::Expr<'_, ByteRange>,
     ) -> (Expr<'arena>, Type<'arena>) {
@@ -346,38 +360,46 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
         (expr, r#type)
     }
 
-    fn synth_let_def(&mut self, def: &surface::LetDef) -> (LetDef<'arena>, Type<'arena>) {
-        let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
-        let name = pat.name();
-
-        let expr = self.check(&def.expr, &type_value);
-        let r#type = self.quote_env().quote(&type_value);
-
-        (LetDef { name, r#type, expr }, type_value)
+    fn synth_param(&mut self, param: &surface::Param) -> (Pat<'arena>, Scrut<'arena>) {
+        let (pat, r#type) = self.synth_ann_pat(&param.pat, &param.r#type);
+        let scrut = Scrut::new(Expr::Local(Index::new()), r#type);
+        (pat, scrut)
     }
 
     fn synth_fun_type(
         &mut self,
         params: &[surface::Param],
-        body: &surface::Expr,
+        codomain: &surface::Expr,
     ) -> (Expr<'arena>, Type<'arena>) {
         match params.split_first() {
             None => {
-                let expr = self.check(body, &Value::TYPE);
+                let expr = self.check(codomain, &Value::TYPE);
                 (expr, Value::TYPE)
             }
             Some((param, params)) => {
-                let (pat, param_type) = self.synth_ann_pat(&param.pat, &param.r#type);
-                let domain_expr = self.quote_env().quote(&param_type);
+                let range = param.pat.range();
+                let (pat, scrut) = self.synth_param(param);
+                let domain = self.quote_env().quote(&scrut.r#type);
                 let name = pat.name();
 
-                let (body_expr, _) =
-                    self.with_param(name, param_type, |this| this.synth_fun_type(params, body));
+                let (defs, codomain) = self.with_scope(|this| {
+                    let defs = this.push_param_pat(&pat, &scrut);
+                    let (codomain, _) = this.synth_fun_type(params, codomain);
+                    (defs, codomain)
+                });
 
-                let expr =
-                    self.expr_builder()
-                        .fun_type(param.plicity, name, domain_expr, body_expr);
-                (expr, Value::TYPE)
+                let codomain = self.with_param(name, scrut.r#type.clone(), |this| {
+                    this.elab_match(
+                        PatMatrix::singleton(scrut, pat),
+                        &[Body::new(codomain, defs)],
+                        range,
+                        range,
+                    )
+                });
+                let expr = self
+                    .expr_builder()
+                    .fun_type(param.plicity, name, domain, codomain);
+                (expr, Type::TYPE)
             }
         }
     }
@@ -390,28 +412,47 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
         match params.split_first() {
             None => self.synth(body),
             Some((param, params)) => {
-                let (pat, param_type) = self.synth_ann_pat(&param.pat, &param.r#type);
-                let domain_expr = self.quote_env().quote(&param_type);
+                let range = param.pat.range();
+                let (pat, scrut) = self.synth_param(param);
                 let name = pat.name();
+                let domain = self.quote_env().quote(&scrut.r#type);
 
-                let (body_expr, body_type) = self.with_param(name, param_type.clone(), |this| {
+                let (defs, body_expr, body_type) = self.with_scope(|this| {
+                    let defs = this.push_param_pat(&pat, &scrut);
                     let (body_expr, body_type) = this.synth_fun_lit(params, body);
-                    (body_expr, this.quote_env().quote(&body_type))
+                    let body_type = this.quote_env().quote(&body_type);
+                    (defs, body_expr, body_type)
                 });
 
-                let expr = self
-                    .expr_builder()
-                    .fun_lit(param.plicity, name, domain_expr, body_expr);
-                let r#type = Value::FunType(
-                    param.plicity,
-                    name,
-                    self.scope.to_scope(param_type),
-                    Closure::new(
-                        self.local_env.values.clone(),
-                        self.scope.to_scope(body_type),
-                    ),
-                );
-                (expr, r#type)
+                let matrix = PatMatrix::singleton(scrut.clone(), pat);
+
+                let (expr, r#type) = self.with_param(name, scrut.r#type.clone(), |this| {
+                    let body_expr = this.elab_match(
+                        matrix.clone(),
+                        &[Body::new(body_expr, defs.clone())],
+                        range,
+                        range,
+                    );
+
+                    let body_type = this.elab_match(
+                        matrix,
+                        &[Body::new(body_type, defs.clone())],
+                        range,
+                        range,
+                    );
+
+                    let expr = this
+                        .expr_builder()
+                        .fun_lit(param.plicity, name, domain, body_expr);
+
+                    let r#type =
+                        this.expr_builder()
+                            .fun_type(param.plicity, name, domain, body_type);
+
+                    (expr, r#type)
+                });
+
+                (expr, self.eval_env().eval(&r#type))
             }
         }
     }
@@ -432,16 +473,31 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                 match expected {
                     Value::FunType(plicity, _, domain, codomain) if param.plicity == plicity => {
                         let pat = self.check_ann_pat(&param.pat, &param.r#type, domain);
-                        let domain_expr = self.quote_env().quote(domain);
                         let name = pat.name();
+                        let domain_expr = self.quote_env().quote(domain);
+                        let scrut = Scrut::new(Expr::Local(Index::new()), domain.clone());
 
-                        let arg = self.local_env.next_var();
-                        self.local_env.push_param(name, domain.clone());
-                        let body_type = self.elim_env().apply_closure(codomain, arg);
-                        let body_expr = self.check_fun_lit(range, next_params, body, &body_type);
-                        self.local_env.pop();
+                        let (defs, body_expr) = self.with_scope(|this| {
+                            let expected_type = this
+                                .elim_env()
+                                .apply_closure(codomain, this.local_env.next_var());
+                            let defs = this.push_param_pat(&pat, &scrut);
+                            let body_expr =
+                                this.check_fun_lit(range, next_params, body, &expected_type);
+                            (defs, body_expr)
+                        });
 
-                        expr_builder.fun_lit(plicity, name, domain_expr, body_expr)
+                        let body_expr = self.with_param(name, scrut.r#type.clone(), |this| {
+                            this.elab_match(
+                                PatMatrix::singleton(scrut, pat),
+                                &[Body::new(body_expr, defs)],
+                                range,
+                                range,
+                            )
+                        });
+
+                        self.expr_builder()
+                            .fun_lit(param.plicity, name, domain_expr, body_expr)
                     }
                     // If an implicit function is expected, try to generalize the
                     // function literal by wrapping it in an implicit function
@@ -466,21 +522,68 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
         }
     }
 
+    fn synth_scrut(&mut self, expr: &surface::Expr<'_>) -> Scrut<'arena> {
+        let (expr, r#type) = self.synth_and_insert_implicit_apps(expr);
+        Scrut::new(expr, r#type)
+    }
+
+    fn check_match(
+        &mut self,
+        range: ByteRange,
+        scrut: &surface::Expr<'_, ByteRange>,
+        cases: &[surface::MatchCase<'_, ByteRange>],
+        expected_type: &Type<'arena>,
+    ) -> Expr<'arena> {
+        let expected_type = self.elim_env().update_metas(expected_type);
+
+        let scrut_range = scrut.range();
+        let scrut = self.synth_scrut(scrut);
+        let scrut_value = self.eval_env().eval(&scrut.expr);
+
+        let mut rows = Vec::with_capacity(cases.len());
+        let mut bodies = Vec::with_capacity(cases.len());
+
+        for case in cases {
+            let pat = self.check_pat(&case.pat, &scrut.r#type);
+
+            let initial_len = self.local_env.len();
+            let defs = self.push_match_pat(&pat, &scrut, &scrut_value);
+            let expr = self.check(&case.expr, &expected_type);
+            self.local_env.truncate(initial_len);
+
+            rows.push(PatRow::singleton((pat, scrut.clone())));
+            bodies.push(Body::new(expr, defs));
+        }
+
+        let matrix = PatMatrix::new(rows);
+
+        self.elab_match(matrix, &bodies, range, scrut_range)
+    }
+
     pub fn check(&mut self, expr: &surface::Expr, expected: &Type<'arena>) -> Expr<'arena> {
         let expected = self.elim_env().update_metas(expected);
-        let expr_builder = self.expr_builder();
         match (expr, &expected) {
             (surface::Expr::Error(_), _) => Expr::Error,
             (surface::Expr::Paren(_, expr), _) => self.check(expr, &expected),
             (surface::Expr::Let(_, (def, body)), _) => {
-                let (def, type_value) = self.synth_let_def(def);
-                let expr_value = self.eval_env().eval(&def.expr);
+                let range = def.pat.range();
+                let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
+                let def_expr = self.check(&def.expr, &type_value);
+                let def_value = self.eval_env().eval(&def_expr);
+                let scrut = Scrut::new(def_expr, type_value);
 
-                let body = self.with_def(def.name, type_value, expr_value, |this| {
-                    this.check(body, &expected)
+                let (defs, body_expr) = self.with_scope(|this| {
+                    let defs = this.push_def_pat(&pat, &scrut, &def_value);
+                    let body_expr = this.check(body, &expected);
+                    (defs, body_expr)
                 });
 
-                expr_builder.r#let(def, body)
+                self.elab_match(
+                    PatMatrix::singleton(scrut, pat),
+                    &[Body::new(body_expr, defs)],
+                    range,
+                    range,
+                )
             }
             (surface::Expr::FunLit(range, params, body), _) => {
                 self.local_env.reserve(params.len());

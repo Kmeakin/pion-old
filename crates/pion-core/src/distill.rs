@@ -210,7 +210,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                     });
                     body = next_body;
                 }
-                let body = self.expr_prec(Prec::Fun, body);
+                let body = self.expr_prec(Prec::Let, body);
                 self.truncate_local(initial_len);
 
                 let params = self.scope.to_scope_from_iter(params);

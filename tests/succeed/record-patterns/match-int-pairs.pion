@@ -1,0 +1,23 @@
+//~ run = "${PION} elab ${FILE}"
+
+let f1 : Int -> Int -> Int
+= fun x y => match (x, y) {
+    (0, a) => a,
+    (b, 0) => b,
+    (1, c) => c,
+    (d, 1) => d,
+    (_, _) => 5,
+};
+
+let f2 : Int -> Int -> Int
+= fun x y =>
+let p = (x, y);
+match p {
+    (0, a) => a,
+    (b, 0) => b,
+    (1, c) => c,
+    (d, 1) => d,
+    (_, _) => 5,
+};
+
+{}

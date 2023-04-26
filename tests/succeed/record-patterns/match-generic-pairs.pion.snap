@@ -1,0 +1,9 @@
+exit status: 0
+stdout:
+let fst : fun (A : Type) (B : Type) -> (A, B) -> (A, B) =
+    fun (A : Type) (B : Type) (p : (A, B)) => p;
+let snd : fun (A : Type) (B : Type) -> (A, B) -> (A, B) =
+    fun (A : Type) (B : Type) (p : (A, B)) => p;
+() : ()
+
+stderr:
