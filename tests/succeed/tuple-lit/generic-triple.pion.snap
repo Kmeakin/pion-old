@@ -1,20 +1,11 @@
 exit status: 0
 stdout:
-let get1 : fun (A : Type) (B : Type) (C : Type) -> (
-    A,
-    B,
-    C,
-) -> A = fun (A : Type) (B : Type) (C : Type) (p : (A, B, C)) => p._0;
-let get2 : fun (A : Type) (B : Type) (C : Type) -> (
-    A,
-    B,
-    C,
-) -> B = fun (A : Type) (B : Type) (C : Type) (p : (A, B, C)) => p._1;
-let get3 : fun (A : Type) (B : Type) (C : Type) -> (
-    A,
-    B,
-    C,
-) -> C = fun (A : Type) (B : Type) (C : Type) (p : (A, B, C)) => p._2;
+let get1 : fun (A : Type) (B : Type) (C : Type) -> (A, B, C) -> A =
+    fun (A : Type) (B : Type) (C : Type) (p : (A, B, C)) => p._0;
+let get2 : fun (A : Type) (B : Type) (C : Type) -> (A, B, C) -> B =
+    fun (A : Type) (B : Type) (C : Type) (p : (A, B, C)) => p._1;
+let get3 : fun (A : Type) (B : Type) (C : Type) -> (A, B, C) -> C =
+    fun (A : Type) (B : Type) (C : Type) (p : (A, B, C)) => p._2;
 () : ()
 
 stderr:

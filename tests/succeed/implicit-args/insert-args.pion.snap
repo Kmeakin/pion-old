@@ -1,7 +1,8 @@
 exit status: 0
 stdout:
 let id : fun (@A : Type) -> A -> A = fun (@A : Type) (a : A) => a;
-let always : fun (@A : Type) (@B : Type) -> A -> B -> A = fun (@A : Type) (@B : Type) (a : A) (b : B) => a;
+let always : fun (@A : Type) (@B : Type) -> A -> B -> A =
+    fun (@A : Type) (@B : Type) (a : A) (b : B) => a;
 let _ : Bool = id @Bool false;
 let _ : Int = always @Int @Bool 0 false;
 () : ()

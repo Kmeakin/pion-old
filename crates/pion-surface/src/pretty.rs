@@ -32,29 +32,33 @@ impl<'arena> PrettyCtx<'arena> {
                         .as_ref()
                         .map(|r#type| self.text(" : ").append(self.expr(r#type))),
                 )
-                .append(" = ")
-                .append(self.expr(&def.expr))
+                .append(" =")
+                .append(self.line().append(self.expr(&def.expr)).nest(INDENT))
                 .append(";")
+                .group()
                 .append(self.line())
                 .append(self.expr(body)),
             Expr::Arrow(_, plicity, (r#type, body)) => self
                 .plicity(*plicity)
                 .append(self.expr(r#type))
-                .append(" -> ")
+                .append(" ->")
+                .append(self.softline())
                 .append(self.expr(body)),
             Expr::FunType(_, params, body) => self
                 .text("fun ")
                 .append(
                     self.intersperse(params.iter().map(|param| self.param(param)), self.space()),
                 )
-                .append(" -> ")
+                .append(" ->")
+                .append(self.softline())
                 .append(self.expr(body)),
             Expr::FunLit(_, params, body) => self
                 .text("fun ")
                 .append(
                     self.intersperse(params.iter().map(|param| self.param(param)), self.space()),
                 )
-                .append(" => ")
+                .append(" =>")
+                .append(self.softline())
                 .append(self.expr(body)),
             Expr::FunApp(_, fun, args) => self
                 .expr(fun)
