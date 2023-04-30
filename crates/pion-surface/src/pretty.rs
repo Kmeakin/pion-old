@@ -18,7 +18,7 @@ impl<'arena> PrettyCtx<'arena> {
     pub fn expr<Extra>(&'arena self, expr: &Expr<'_, Extra>) -> DocBuilder<'arena> {
         match expr {
             Expr::Error(_) => self.text("#error"),
-            Expr::Paren(_, expr) => self.expr(expr).parens(),
+            Expr::Paren(_, expr) => self.expr(expr).parens().group(),
             Expr::Ann(_, (expr, r#type)) => self.expr(expr).append(" : ").append(self.expr(r#type)),
             Expr::Lit(_, lit) => self.lit(lit),
             Expr::Placeholder(_) => self.text("_"),
@@ -47,7 +47,8 @@ impl<'arena> PrettyCtx<'arena> {
             Expr::FunType(_, params, body) => self
                 .text("fun ")
                 .append(
-                    self.intersperse(params.iter().map(|param| self.param(param)), self.space()),
+                    self.intersperse(params.iter().map(|param| self.param(param)), self.line())
+                        .group(),
                 )
                 .append(" ->")
                 .append(self.softline())
@@ -55,7 +56,8 @@ impl<'arena> PrettyCtx<'arena> {
             Expr::FunLit(_, params, body) => self
                 .text("fun ")
                 .append(
-                    self.intersperse(params.iter().map(|param| self.param(param)), self.space()),
+                    self.intersperse(params.iter().map(|param| self.param(param)), self.line())
+                        .group(),
                 )
                 .append(" =>")
                 .append(self.softline())
@@ -182,7 +184,8 @@ impl<'arena> PrettyCtx<'arena> {
                 .append(self.pat(pat))
                 .append(" : ")
                 .append(self.expr(r#type))
-                .parens(),
+                .parens()
+                .group(),
         }
     }
 

@@ -1,0 +1,55 @@
+exit status: 0
+stdout:
+let foo : Int =
+    let x : Int = 0;
+    let x : Int = 0;
+    let x : Int =
+        let y : Int = 1;
+        let y : Int = 1;
+        let y : Int = 1;
+        let y : Int = 1;
+        y;
+    let x : Int = 0;
+    let x : Int = 0;
+    x;
+let _ : Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool ->
+Bool -> Bool =
+    fun (x : Bool)
+    (x : Bool)
+    (x : Bool)
+    (x : Bool)
+    (x : Bool)
+    (x : Bool)
+    (x : Bool)
+    (x : Bool)
+    (x : Bool)
+    (x : Bool) => x;
+let _ : {
+    a : Int,
+    b : Int,
+    c : Int,
+    d : Int,
+    e : Int,
+    f : Int,
+    g : Int,
+    h : Int,
+    i : Int,
+    j : Int,
+    k : Int,
+} =
+    {
+        a = 0,
+        b = 1,
+        c = 2,
+        d = 3,
+        e = 4,
+        f = 5,
+        g = 6,
+        h = 7,
+        i = 8,
+        j = 9,
+        k = 10,
+    };
+() : ()
+
+stderr:

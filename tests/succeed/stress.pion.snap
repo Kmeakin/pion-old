@@ -89,23 +89,26 @@ let zero : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat =
     fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) => zero;
 let succ : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
 fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat =
-    fun (prev : fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-    Nat) (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-    succ (prev Nat succ zero);
+    fun (prev : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat)
+    (Nat : Type)
+    (succ : Nat -> Nat)
+    (zero : Nat) => succ (prev Nat succ zero);
 let add : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
 (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> fun (Nat : Type) -> (Nat ->
 Nat) -> Nat -> Nat =
-    fun (n0 : fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-    Nat) (n1 : fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-    Nat) (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-    n0 Nat succ (n1 Nat succ zero);
+    fun (n0 : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat)
+    (n1 : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat)
+    (Nat : Type)
+    (succ : Nat -> Nat)
+    (zero : Nat) => n0 Nat succ (n1 Nat succ zero);
 let mul : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
 (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> fun (Nat : Type) -> (Nat ->
 Nat) -> Nat -> Nat =
-    fun (n0 : fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-    Nat) (n1 : fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-    Nat) (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-    n0 Nat (n1 Nat succ) zero;
+    fun (n0 : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat)
+    (n1 : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat)
+    (Nat : Type)
+    (succ : Nat -> Nat)
+    (zero : Nat) => n0 Nat (n1 Nat succ) zero;
 let n0 : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat = zero;
 let n1 : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat = succ n0;
 let n2 : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat = succ n1;
@@ -126,51 +129,60 @@ let Vec : Type -> (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Type =
     (fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Elem ->
     Vec len -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
     succ (len Nat succ zero))) -> Vec len;
-let vnil : fun (Elem : Type) (Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-Nat) -> Type) -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-zero) -> (fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Elem ->
+let vnil : fun (Elem : Type)
+(Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Type) ->
+Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) => zero) ->
+(fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Elem ->
 Vec len -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-succ (len Nat succ zero))) -> Vec (fun (Nat : Type) (succ : Nat ->
-Nat) (zero : Nat) => zero) =
-    fun (Elem : Type) (Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
-    Type) (nil : Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-    zero)) (cons : fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
+succ (len Nat succ zero))) -> Vec (fun (Nat : Type)
+(succ : Nat -> Nat)
+(zero : Nat) => zero) =
+    fun (Elem : Type)
+    (Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Type)
+    (nil : Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) => zero))
+    (cons : fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
     Elem -> Vec len -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
     succ (len Nat succ zero))) => nil;
-let vcons : fun (Elem : Type) (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-Nat) -> Elem -> (fun (Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
-Type) -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) => zero) ->
+let vcons : fun (Elem : Type)
+(len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Elem ->
+(fun (Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Type) ->
+Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) => zero) ->
 (fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Elem ->
 Vec len -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
 succ (len Nat succ zero))) -> Vec len) -> fun (Vec : (fun (Nat : Type) ->
-(Nat -> Nat) -> Nat -> Nat) -> Type) -> Vec (fun (Nat : Type) (succ : Nat ->
-Nat) (zero : Nat) => zero) -> (fun (len : fun (Nat : Type) -> (Nat -> Nat) ->
-Nat -> Nat) -> Elem -> Vec len -> Vec (fun (Nat : Type) (succ : Nat ->
-Nat) (zero : Nat) => succ (len Nat succ zero))) ->
-Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-succ (len Nat succ zero)) =
-    fun (Elem : Type) (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-    Nat) (head : Elem) (tail : fun (Vec : (fun (Nat : Type) -> (Nat -> Nat) ->
-    Nat -> Nat) -> Type) -> Vec (fun (Nat : Type) (succ : Nat ->
-    Nat) (zero : Nat) => zero) -> (fun (len : fun (Nat : Type) -> (Nat ->
-    Nat) -> Nat -> Nat) -> Elem -> Vec len ->
-    Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-    succ (len Nat succ zero))) -> Vec len) (Vec : (fun (Nat : Type) -> (Nat ->
-    Nat) -> Nat -> Nat) -> Type) (nil : Vec (fun (Nat : Type) (succ : Nat ->
-    Nat) (zero : Nat) => zero)) (cons : fun (len : fun (Nat : Type) -> (Nat ->
-    Nat) -> Nat -> Nat) -> Elem -> Vec len ->
-    Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
+(Nat -> Nat) -> Nat -> Nat) -> Type) -> Vec (fun (Nat : Type)
+(succ : Nat -> Nat)
+(zero : Nat) => zero) -> (fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
+Nat) -> Elem -> Vec len -> Vec (fun (Nat : Type)
+(succ : Nat -> Nat)
+(zero : Nat) => succ (len Nat succ zero))) -> Vec (fun (Nat : Type)
+(succ : Nat -> Nat)
+(zero : Nat) => succ (len Nat succ zero)) =
+    fun (Elem : Type)
+    (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat)
+    (head : Elem)
+    (tail : fun (Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
+    Type) -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) => zero) ->
+    (fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Elem ->
+    Vec len -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
+    succ (len Nat succ zero))) -> Vec len)
+    (Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Type)
+    (nil : Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) => zero))
+    (cons : fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
+    Elem -> Vec len -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
     succ (len Nat succ zero))) => cons len head (tail Vec nil cons);
 let vec1 : fun (Vec : (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
 Type) -> Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) => zero) ->
 (fun (len : fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) ->
 (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) -> Vec len ->
 Vec (fun (Nat : Type) (succ : Nat -> Nat) (zero : Nat) =>
-succ (len Nat succ zero))) -> Vec (fun (Nat : Type) (succ : Nat ->
-Nat) (zero : Nat) =>
+succ (len Nat succ zero))) -> Vec (fun (Nat : Type)
+(succ : Nat -> Nat)
+(zero : Nat) =>
 succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ (succ zero)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) =
-    vcons (fun (Nat : Type) -> (Nat -> Nat) -> Nat ->
-    Nat) (fun (_ : #error) (a : #error) (b : #error) =>
+    vcons (fun (Nat : Type) -> (Nat -> Nat) -> Nat -> Nat) (fun (_ : #error)
+    (a : #error)
+    (b : #error) =>
     a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a b))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) zero (vcons (fun (Nat : Type) ->
     (Nat -> Nat) -> Nat -> Nat) (fun (_ : #error) (a : #error) (b : #error) =>
     a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a (a b)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) zero (vcons (fun (Nat : Type) ->
