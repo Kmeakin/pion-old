@@ -14,7 +14,7 @@ pub fn check_coverage<'arena>(
 
     // A matrix is exhaustive iff the the wildcard pattern `_` is not useful
     if is_useful(ctx, matrix, &row) {
-        ctx.emit_error(ElabError::InexhaustiveMatch {
+        ctx.emit_message(Message::InexhaustiveMatch {
             range: match_range,
             scrut_range,
         });
@@ -34,7 +34,7 @@ pub fn check_coverage<'arena>(
 
         if !is_useful(ctx, &matrix, row) {
             let range = row.first().unwrap().0.range();
-            ctx.emit_error(ElabError::UnreachablePat { range });
+            ctx.emit_message(Message::UnreachablePat { range });
         }
     }
 }

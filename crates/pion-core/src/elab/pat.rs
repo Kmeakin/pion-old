@@ -2,7 +2,7 @@ use super::expr::synth_lit;
 use super::r#match::Scrut;
 use super::*;
 
-impl<'arena, 'error> ElabCtx<'arena, 'error> {
+impl<'arena, 'message> ElabCtx<'arena, 'message> {
     pub fn synth_ann_pat(
         &mut self,
         pat: &surface::Pat,
@@ -34,7 +34,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                     Err(error) => {
                         let found = self.pretty_value(&ann_value);
                         let expected = self.pretty_value(expected);
-                        self.emit_error(ElabError::Unification {
+                        self.emit_message(Message::Unification {
                             range: ann.range(),
                             error,
                             found,
@@ -77,7 +77,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
 
                     let (label_range, label) = field.label;
                     if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
-                        self.emit_error(ElabError::RecordFieldDuplicate {
+                        self.emit_message(Message::RecordFieldDuplicate {
                             name: "record literal",
                             label,
                             first_range: *first_range,
@@ -164,7 +164,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
             Err(error) => {
                 let found = self.pretty_value(&from);
                 let expected = self.pretty_value(&to);
-                self.emit_error(ElabError::Unification {
+                self.emit_message(Message::Unification {
                     range,
                     found,
                     expected,

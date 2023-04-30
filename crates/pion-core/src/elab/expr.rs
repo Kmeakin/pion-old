@@ -5,7 +5,7 @@ use super::r#match::PatRow;
 use super::*;
 use crate::elab::r#match::{Body, PatMatrix, Scrut};
 
-impl<'arena, 'error> ElabCtx<'arena, 'error> {
+impl<'arena, 'message> ElabCtx<'arena, 'message> {
     /// Synthesize the type of the given surface expr.
     ///
     /// Returns the elaborated expr in the core language and its type.
@@ -51,7 +51,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                     return (Expr::Prim(prim), r#type.clone());
                 }
 
-                self.emit_error(ElabError::UnboundName {
+                self.emit_message(Message::UnboundName {
                     range: *range,
                     name: *name,
                 });
@@ -121,7 +121,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                         }
                         Value::FunType(plicity, ..) => {
                             let fun_type = self.pretty_value(&fun_type);
-                            self.emit_error(ElabError::FunAppPlicity {
+                            self.emit_message(Message::FunAppPlicity {
                                 fun_range,
                                 fun_type,
                                 fun_plicity: plicity,
@@ -133,7 +133,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                         _ if expr.is_error() || r#type.is_error() => return synth_error_expr(),
                         _ if arity == 0 => {
                             let fun_type = self.pretty_value(&fun_type);
-                            self.emit_error(ElabError::FunAppNotFun {
+                            self.emit_message(Message::FunAppNotFun {
                                 fun_range,
                                 fun_type,
                                 num_args: args.len(),
@@ -147,7 +147,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                         }
                         _ => {
                             let fun_type = self.pretty_value(&fun_type);
-                            self.emit_error(ElabError::FunAppTooManyArgs {
+                            self.emit_message(Message::FunAppTooManyArgs {
                                 fun_range,
                                 fun_type,
                                 expected_arity: arity,
@@ -176,7 +176,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
 
                         let (label_range, label) = field.label;
                         if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
-                            this.emit_error(ElabError::RecordFieldDuplicate {
+                            this.emit_message(Message::RecordFieldDuplicate {
                                 name: "record type",
                                 label,
                                 first_range: *first_range,
@@ -207,7 +207,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
 
                     let (label_range, label) = field.label;
                     if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
-                        self.emit_error(ElabError::RecordFieldDuplicate {
+                        self.emit_message(Message::RecordFieldDuplicate {
                             name: "record literal",
                             label,
                             first_range: *first_range,
@@ -288,7 +288,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
 
                         _ => {
                             let head_type = self.pretty_value(&head_type);
-                            self.emit_error(ElabError::RecordProjNotRecord {
+                            self.emit_message(Message::RecordProjNotRecord {
                                 head_range,
                                 head_type,
                                 label_range: *label_range,
@@ -299,7 +299,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                     }
 
                     let head_type = self.pretty_value(&head_type);
-                    self.emit_error(ElabError::RecordProjNotFound {
+                    self.emit_message(Message::RecordProjNotFound {
                         head_range,
                         head_type,
                         label_range: *label_range,
@@ -664,7 +664,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
             Err(error) => {
                 let found = self.pretty_value(from);
                 let expected = self.pretty_value(to);
-                self.emit_error(ElabError::Unification {
+                self.emit_message(Message::Unification {
                     range,
                     found,
                     expected,

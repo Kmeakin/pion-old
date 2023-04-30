@@ -54,11 +54,11 @@ fn main() {
             let file_id = driver.add_file(&file, contents);
             let expr = driver.parse_expr(&scope, file_id);
 
-            let mut on_error = |error: pion_core::reporting::ElabError| {
-                let diag = error.to_diagnostic(file_id);
+            let mut on_message = |message: pion_core::reporting::Message| {
+                let diag = message.to_diagnostic(file_id);
                 driver.emit_diagnostic(diag);
             };
-            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope, &mut on_error);
+            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope, &mut on_message);
             let (expr, r#type) = elab_ctx.elab_expr(expr);
 
             let mut distill_ctx = elab_ctx.distill_ctx();
@@ -75,11 +75,11 @@ fn main() {
             let file_id = driver.add_file(&file, contents);
             let expr = driver.parse_expr(&scope, file_id);
 
-            let mut on_error = |error: pion_core::reporting::ElabError| {
-                let diag = error.to_diagnostic(file_id);
+            let mut on_message = |message: pion_core::reporting::Message| {
+                let diag = message.to_diagnostic(file_id);
                 driver.emit_diagnostic(diag);
             };
-            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope, &mut on_error);
+            let mut elab_ctx = pion_core::elab::ElabCtx::new(&scope, &mut on_message);
             let (expr, _) = elab_ctx.elab_expr(expr);
 
             let expr_value = elab_ctx.eval_env().eval(&expr);

@@ -6,7 +6,7 @@ use self::unify::{PartialRenaming, UnifyCtx};
 use crate::distill::DistillCtx;
 use crate::env::{EnvLen, Index, Level, SharedEnv, UniqueEnv};
 use crate::prim::PrimEnv;
-use crate::reporting::ElabError;
+use crate::reporting::Message;
 use crate::semantics::{ElimEnv, EvalEnv, QuoteEnv};
 use crate::syntax::*;
 
@@ -16,24 +16,24 @@ mod pat;
 pub mod unify;
 
 /// Elaboration context.
-pub struct ElabCtx<'arena, 'error> {
+pub struct ElabCtx<'arena, 'message> {
     scope: &'arena Scope<'arena>,
     prim_env: PrimEnv<'arena>,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
-    on_error: &'error mut dyn FnMut(ElabError),
+    on_message: &'message mut dyn FnMut(Message),
 }
 
-impl<'arena, 'error> ElabCtx<'arena, 'error> {
-    pub fn new(scope: &'arena Scope<'arena>, on_error: &'error mut dyn FnMut(ElabError)) -> Self {
+impl<'arena, 'message> ElabCtx<'arena, 'message> {
+    pub fn new(scope: &'arena Scope<'arena>, on_message: &'message mut dyn FnMut(Message)) -> Self {
         Self {
             scope,
             prim_env: PrimEnv::new(),
             local_env: LocalEnv::default(),
             meta_env: MetaEnv::default(),
             renaming: PartialRenaming::default(),
-            on_error,
+            on_message,
         }
     }
 
@@ -50,10 +50,10 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
         (expr, r#type)
     }
 
-    fn emit_error(&mut self, error: ElabError) { (self.on_error)(error) }
+    fn emit_message(&mut self, message: Message) { (self.on_message)(message) }
 
     fn report_unsolved_metas(&mut self) {
-        let handler = &mut self.on_error;
+        let handler = &mut self.on_message;
         let meta_env = &self.meta_env;
 
         for (source, _, value) in meta_env.iter() {
@@ -65,7 +65,7 @@ impl<'arena, 'error> ElabCtx<'arena, 'error> {
                 // unsolved meta twice
                 | (None, MetaSource::HoleType(..) | MetaSource::PlaceholderType(..)) => {}
 
-                (None, source) => handler(ElabError::UnsolvedMeta { source }),
+                (None, source) => handler(Message::UnsolvedMeta { source }),
             }
         }
     }

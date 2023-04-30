@@ -6,7 +6,7 @@ use crate::elab::unify::{RenameError, SpineError, UnifyError};
 use crate::elab::MetaSource;
 
 #[derive(Debug, Clone)]
-pub enum ElabError {
+pub enum Message {
     UnboundName {
         range: ByteRange,
         name: Symbol,
@@ -67,7 +67,7 @@ pub enum ElabError {
     },
 }
 
-impl ElabError {
+impl Message {
     pub fn to_diagnostic(&self, file_id: usize) -> Diagnostic<usize> {
         let primary_label = |range: &ByteRange| Label::primary(file_id, *range);
         let secondary_label = |range: &ByteRange| Label::secondary(file_id, *range);
