@@ -15,5 +15,6 @@
 - [x] Holes
 - [x] Diagnostic reporting
 - [x] Implicit parameters
+- [x] Pattern matching
 - [ ] Compiler (core to LLVM)
 - [ ] Modules
