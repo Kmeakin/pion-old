@@ -105,6 +105,10 @@ ExprField: ExprField<'arena> = {
     <label: RangeIdent> "=" <expr: Expr> => ExprField {label, expr},
 }
 
+PatField: PatField<'arena> = {
+    <label: RangeIdent> "=" <pat: Pat> => PatField {label, pat},
+}
+
 MatchCase: MatchCase<'arena> = {
     <pat: Pat> "=>" <expr: Expr> => MatchCase {pat, expr},
 }
@@ -129,6 +133,8 @@ pub Pat: Pat<'arena> = {
     <start: @L> <lit: Lit> <end: @R> => Pat::Lit(ByteRange::new(start, end), lit),
     <start: @L> <ident: Ident> <end: @R> => Pat::Ident(ByteRange::new(start, end), ident),
     <start: @L> "_" <end: @R> => Pat::Underscore(ByteRange::new(start, end)),
+    <start: @L> <pats: Tuple<Pat>> <end: @R> => Pat::TupleLit(ByteRange::new(start, end), pats),
+    <start: @L> "{" <fields: Seq<PatField, ",">> "}" <end: @R> => Pat::RecordLit(ByteRange::new(start, end), fields),
 }
 
 pub Lit: Lit = {

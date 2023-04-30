@@ -2,182 +2,288 @@ use pion_source::location::ByteRange;
 
 use super::*;
 
-#[derive(Debug, Clone)]
-struct MatchInfo<'arena> {
-    range: ByteRange,
-    scrut_range: ByteRange,
+pub mod compile;
+pub mod coverage;
 
-    expected_type: Value<'arena>,
-    scrut_type: Type<'arena>,
-    scrut_expr: Expr<'arena>,
+#[derive(Debug, Clone)]
+pub struct Scrut<'arena> {
+    pub expr: Expr<'arena>,
+    pub r#type: Type<'arena>,
 }
 
-impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
-    pub fn check_match(
-        &mut self,
-        range: ByteRange,
-        scrut: &surface::Expr<'_>,
-        cases: &[surface::MatchCase<'_>],
-        expected: &Type<'arena>,
-    ) -> Expr<'arena> {
-        let (scrut_expr, scrut_type) = self.synth(scrut);
-        let info = MatchInfo {
-            range,
-            scrut_range: scrut.range(),
-            expected_type: expected.clone(),
-            scrut_type,
-            scrut_expr,
-        };
-        self.elab_match(&info, true, cases)
+impl<'arena> Scrut<'arena> {
+    pub fn new(expr: Expr<'arena>, r#type: Type<'arena>) -> Self { Self { expr, r#type } }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Constructor<'arena> {
+    Lit(Lit),
+    Record(&'arena [Symbol]),
+}
+
+impl<'arena> Constructor<'arena> {
+    /// Return number of fields `self` carries
+    pub fn arity(&self) -> usize {
+        match self {
+            Constructor::Lit(_) => 0,
+            Constructor::Record(labels) => labels.len(),
+        }
     }
 
-    fn elab_match(
-        &mut self,
-        info: &MatchInfo<'arena>,
-        is_reachable: bool,
-        cases: &[surface::MatchCase<'_>],
-    ) -> Expr<'arena> {
-        match cases.split_first() {
-            None => self.elab_match_absurd(info, is_reachable),
-            Some((case, cases)) => match self.check_pat(&case.pat, &info.scrut_type) {
-                Pat::Lit(lit) => {
-                    self.check_pat_reachable(is_reachable, case.pat.range());
-
-                    let mut lit_cases = vec![(lit, self.check(&case.expr, &info.expected_type))];
-
-                    let mut cases = cases.iter();
-                    while let Some(case) = cases.next() {
-                        let pat = self.check_pat(&case.pat, &info.scrut_type);
-                        match pat {
-                            Pat::Lit(lit) => {
-                                let body_expr = self.check(&case.expr, &info.expected_type);
-
-                                match lit_cases.binary_search_by(|(l, _)| Lit::cmp(l, &lit)) {
-                                    Ok(_) => self.emit_error(ElabError::UnreachablePat {
-                                        range: case.pat.range(),
-                                    }),
-                                    Err(index) => {
-                                        self.check_pat_reachable(is_reachable, case.pat.range());
-                                        lit_cases.insert(index, (lit, body_expr));
-                                    }
-                                }
-
-                                if let Some(n) = lit.num_inhabitants() {
-                                    if lit_cases.len() as u128 >= n {
-                                        // The match is exhaustive.
-                                        // No need to elaborate the rest of the patterns
-                                        self.elab_match_unreachable(info, cases.as_slice());
-
-                                        return Expr::Match(
-                                            self.scope.to_scope(info.scrut_expr),
-                                            self.scope.to_scope_from_iter(lit_cases.into_iter()),
-                                            None,
-                                        );
-                                    }
-                                }
-                            }
-
-                            Pat::Ident(_) | Pat::Ignore | Pat::Error(_) => {
-                                let name = pat.name();
-                                let range = case.pat.range();
-
-                                if !pat.is_err() {
-                                    self.check_pat_reachable(is_reachable, range);
-                                }
-                                self.elab_match_unreachable(info, cases.as_slice());
-
-                                let default =
-                                    self.with_param(name, info.scrut_type.clone(), |this| {
-                                        this.check(&case.expr, &info.expected_type)
-                                    });
-
-                                return Expr::Match(
-                                    self.scope.to_scope(info.scrut_expr),
-                                    self.scope.to_scope_from_iter(lit_cases),
-                                    Some((name, self.scope.to_scope(default))),
-                                );
-                            }
-                        }
-                    }
-
-                    // Finished all the literal patterns without encountering a default
-                    // case or an exhaustive match
-                    let default_expr = self.elab_match_absurd(info, is_reachable);
-
-                    Expr::Match(
-                        self.scope.to_scope(info.scrut_expr),
-                        self.scope.to_scope_from_iter(lit_cases),
-                        Some((None, self.scope.to_scope(default_expr))),
-                    )
-                }
-                Pat::Ident(name) => {
-                    self.check_pat_reachable(is_reachable, case.pat.range());
-
-                    let def_name = Some(name);
-                    let def_expr = self.eval_env().eval(&info.scrut_expr);
-                    let def_type = self.quote_env().quote(&info.scrut_type);
-
-                    let body_expr =
-                        self.with_def(def_name, def_expr, info.scrut_type.clone(), |this| {
-                            this.check(&case.expr, &info.expected_type)
-                        });
-
-                    self.elab_match_unreachable(info, cases);
-
-                    self.expr_builder().r#let(
-                        LetDef {
-                            name: def_name,
-                            r#type: def_type,
-                            expr: info.scrut_expr,
-                        },
-                        body_expr,
-                    )
-                }
-                Pat::Ignore => {
-                    self.check_pat_reachable(is_reachable, case.pat.range());
-                    let expr = self.check(&case.expr, &info.expected_type);
-                    self.elab_match_unreachable(info, cases);
-                    expr
-                }
-                // If we hit an error, propagate it, while still checking
-                // the body expression and the subsequent branches.
-                Pat::Error(..) => {
-                    self.check(&case.expr, &info.expected_type);
-                    self.elab_match_unreachable(info, cases);
-                    Expr::Error
-                }
+    pub fn is_exhaustive(ctors: &[Constructor]) -> bool {
+        match ctors.first() {
+            None => false,
+            Some(ctor) => match ctor.num_inhabitants() {
+                None => false,
+                Some(n) => ctors.len() as u128 >= n,
             },
         }
     }
 
-    /// Elaborate unreachable match cases. This is useful for that these cases
-    /// are correctly typed, even if they are never actually needed.
-    fn elab_match_unreachable(
+    /// Return the number of inhabitants of `self`.
+    /// `None` represents infinity
+    pub fn num_inhabitants(&self) -> Option<u128> {
+        match self {
+            Constructor::Lit(lit) => lit.num_inhabitants(),
+            Constructor::Record(_) => Some(1),
+        }
+    }
+
+    pub fn as_lit(&self) -> Option<&Lit> {
+        match self {
+            Constructor::Lit(lit) => Some(lit),
+            Constructor::Record(_) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PatMatrix<'arena> {
+    rows: Vec<PatRow<'arena>>,
+    indices: Vec<usize>,
+}
+
+impl<'arena> PatMatrix<'arena> {
+    pub fn new(rows: Vec<PatRow<'arena>>) -> Self {
+        if let Some((first, rows)) = rows.split_first() {
+            for row in rows {
+                debug_assert_eq!(
+                    first.entries.len(),
+                    row.entries.len(),
+                    "All rows must be same length"
+                );
+            }
+        }
+        let indices = (0..rows.len()).collect();
+        Self { rows, indices }
+    }
+
+    pub fn singleton(scrut: Scrut<'arena>, pat: Pat<'arena>) -> Self {
+        Self::new(vec![PatRow::singleton((pat, scrut))])
+    }
+
+    pub fn num_rows(&self) -> usize { self.rows.len() }
+
+    pub fn num_columns(&self) -> Option<usize> { self.rows.first().map(PatRow::len) }
+
+    /// Return true if `self` is the null matrix, `∅` - ie `self` has zero rows
+    pub fn is_null(&self) -> bool { self.num_rows() == 0 }
+
+    /// Return true if `self` is the unit matrix, `()` - ie `self` has zero
+    /// columns and at least one row
+    pub fn is_unit(&self) -> bool { self.num_columns() == Some(0) }
+
+    /// Iterate over all the pairs in the `index`th column
+    pub fn column(&self, index: usize) -> impl ExactSizeIterator<Item = &RowEntry<'arena>> + '_ {
+        self.rows.iter().map(move |row| &row.entries[index])
+    }
+
+    pub fn row(&self, index: usize) -> &PatRow<'arena> { &self.rows[index] }
+
+    pub fn row_index(&self, index: usize) -> usize { self.indices[index] }
+
+    /// Collect all the `Constructor`s in the `index`th column
+    pub fn column_constructors(&self, index: usize) -> Vec<Constructor<'arena>> {
+        let mut ctors = Vec::with_capacity(self.num_rows());
+        for (pat, _) in self.column(index) {
+            match pat {
+                Pat::Error(..) | Pat::Ignore(..) | Pat::Ident(..) => continue,
+                Pat::Lit(_, r#const) => ctors.push(Constructor::Lit(*r#const)),
+                Pat::RecordLit(_, labels, _) => ctors.push(Constructor::Record(labels)),
+            }
+        }
+        ctors.sort_unstable();
+        ctors.dedup();
+        ctors
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&PatRow<'arena>, usize)> {
+        self.rows.iter().zip(self.indices.iter().copied())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PatRow<'arena> {
+    entries: Vec<RowEntry<'arena>>,
+}
+
+impl<'arena> PatRow<'arena> {
+    pub fn new(entries: Vec<RowEntry<'arena>>) -> Self { Self { entries } }
+
+    pub fn singleton(entry: RowEntry<'arena>) -> Self { Self::new(vec![entry]) }
+
+    pub fn tail(&self) -> Self {
+        assert!(!self.is_empty(), "Cannot take tail of empty `PatRow`");
+        Self::new(self.entries[1..].to_vec())
+    }
+
+    pub fn len(&self) -> usize { self.entries.len() }
+
+    pub fn is_empty(&self) -> bool { self.entries.is_empty() }
+
+    pub fn first(&self) -> Option<&RowEntry<'arena>> { self.entries.first() }
+
+    pub fn all_wildcards(&self) -> bool { self.entries.iter().all(|(pat, _)| pat.is_wildcard()) }
+
+    pub fn split_first(&self) -> Option<(&RowEntry<'arena>, Self)> {
+        let (first, rest) = self.entries.split_first()?;
+        Some((first, Self::new(rest.to_vec())))
+    }
+
+    pub fn append(&mut self, mut other: Self) { self.entries.append(&mut other.entries); }
+
+    pub fn patterns(&self) -> impl ExactSizeIterator<Item = &Pat<'arena>> {
+        self.entries.iter().map(|(pattern, _)| pattern)
+    }
+}
+
+/// An element in a `PatRow`: `<scrut.expr> is <pat>`.
+/// This notation is taken from [How to compile pattern matching]
+pub type RowEntry<'arena> = (Pat<'arena>, Scrut<'arena>);
+
+#[derive(Debug, Clone)]
+/// The right hand side of a match clause
+pub struct Body<'arena> {
+    /// The expression to be evaluated
+    expr: Expr<'arena>,
+    /// The variables to be let-bound before `expr` is evaluated
+    defs: Vec<(Option<Symbol>, Scrut<'arena>)>,
+}
+
+impl<'arena> Body<'arena> {
+    pub fn new(expr: Expr<'arena>, defs: Vec<(Option<Symbol>, Scrut<'arena>)>) -> Self {
+        Self { expr, defs }
+    }
+}
+
+impl<'arena> Pat<'arena> {
+    /// Specialise `self` with respect to the constructor `ctor`.
+    pub fn specialize<'error>(
+        &self,
+        ctx: &mut ElabCtx<'arena, 'error>,
+        ctor: &Constructor,
+        scrut: &Scrut<'arena>,
+    ) -> Option<PatRow<'arena>> {
+        match self {
+            Pat::Error(..) | Pat::Ignore(..) | Pat::Ident(..) => {
+                let columns = vec![(Pat::Ignore(self.range()), scrut.clone()); ctor.arity()];
+                Some(PatRow::new(columns))
+            }
+            Pat::Lit(_, lit) if *ctor == Constructor::Lit(*lit) => Some(PatRow::new(vec![])),
+            Pat::RecordLit(_, labels, patterns) if *ctor == Constructor::Record(labels) => {
+                let mut columns = Vec::with_capacity(labels.len());
+                let mut iter = Iterator::zip(labels.iter(), patterns.iter());
+                let Type::RecordType(_, mut telescope) = ctx.elim_env().update_metas(&scrut.r#type) else {
+                    unreachable!("expected record type")
+                };
+
+                while let Some(((label, pattern), (r#type, next_telescope))) = Option::zip(
+                    iter.next(),
+                    ctx.elim_env().split_telescope(telescope.clone()),
+                ) {
+                    telescope = next_telescope(ctx.local_env.next_var());
+                    let scrut_expr = ctx.scope.to_scope(scrut.expr);
+                    let scrut_expr = Expr::RecordProj(scrut_expr, *label);
+                    let scrut = Scrut {
+                        expr: scrut_expr,
+                        r#type,
+                    };
+                    columns.push((*pattern, scrut));
+                }
+                Some(PatRow::new(columns))
+            }
+            Pat::Lit(..) | Pat::RecordLit(..) => None,
+        }
+    }
+}
+
+impl<'arena> PatRow<'arena> {
+    /// Specialise `self` with respect to the constructor `ctor`.
+    pub fn specialize<'error>(
+        &self,
+        ctx: &mut ElabCtx<'arena, 'error>,
+        ctor: &Constructor,
+    ) -> Option<PatRow<'arena>> {
+        assert!(!self.entries.is_empty(), "Cannot specialize empty `PatRow`");
+        let ((pat, scrut), rest) = self.split_first().unwrap();
+        let mut row = pat.specialize(ctx, ctor, scrut)?;
+        row.append(rest);
+        Some(row)
+    }
+}
+
+impl<'arena> PatMatrix<'arena> {
+    /// Specialise `self` with respect to the constructor `ctor`.
+    /// This is the `S` function in *Compiling pattern matching to good decision
+    /// trees*
+    pub fn specialize<'error>(
+        &self,
+        ctx: &mut ElabCtx<'arena, 'error>,
+        ctor: &Constructor,
+    ) -> Self {
+        let (rows, indices) = self
+            .iter()
+            .filter_map(|(row, body)| {
+                let row = row.specialize(ctx, ctor)?;
+                Some((row, body))
+            })
+            .unzip();
+        Self { rows, indices }
+    }
+
+    /// Discard the first column, and all rows starting with a constructed
+    /// pattern. This is the `D` function in *Compiling pattern matching to
+    /// good decision trees*
+    pub fn default(&self) -> Self {
+        assert!(
+            !self.is_unit(),
+            "Cannot default `PatMatrix` with no columns"
+        );
+        let (rows, indices) = self
+            .iter()
+            .filter_map(|(row, body)| match row.first().unwrap().0 {
+                Pat::Error(..) | Pat::Ignore(..) | Pat::Ident(..) => Some((row.tail(), body)),
+                Pat::Lit(..) | Pat::RecordLit(..) => None,
+            })
+            .unzip();
+        Self { rows, indices }
+    }
+}
+
+impl<'arena, 'error> ElabCtx<'arena, 'error> {
+    pub fn elab_match(
         &mut self,
-        info: &MatchInfo<'arena>,
-        cases: &[surface::MatchCase<'_>],
+        mut matrix: PatMatrix<'arena>,
+        bodies: &[Body<'arena>],
+        match_range: ByteRange,
+        scrut_range: ByteRange,
     ) -> Expr<'arena> {
-        self.elab_match(info, false, cases)
-    }
-
-    /// All the equations have been consumed.
-    fn elab_match_absurd(&mut self, info: &MatchInfo<'arena>, is_reachable: bool) -> Expr<'arena> {
-        // Report if we can still reach this point
-        if is_reachable {
-            // TODO: this should be admitted if the scrutinee type is uninhabited
-            self.emit_error(ElabError::InexhaustiveMatch {
-                range: info.range,
-                scrut_range: info.scrut_range,
-            });
-        }
-        Expr::Error
-    }
-
-    /// Ensure that this part of a match expression is reachable, reporting
-    /// a message if it is not.
-    fn check_pat_reachable(&mut self, is_reachable: bool, range: ByteRange) {
-        if !is_reachable {
-            self.emit_error(ElabError::UnreachablePat { range });
-        }
+        debug_assert_eq!(
+            matrix.num_rows(),
+            bodies.len(),
+            "Must have one body for each row"
+        );
+        coverage::check_coverage(self, &matrix, match_range, scrut_range);
+        compile::compile_match(self, &mut matrix, bodies, EnvLen::new())
     }
 }

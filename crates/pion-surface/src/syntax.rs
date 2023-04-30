@@ -69,6 +69,12 @@ pub struct ExprField<'arena, Extra = ByteRange> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct PatField<'arena, Extra = ByteRange> {
+    pub label: (Extra, Symbol),
+    pub pat: Pat<'arena, Extra>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct MatchCase<'arena, Extra = ByteRange> {
     pub pat: Pat<'arena, Extra>,
     pub expr: Expr<'arena, Extra>,
@@ -160,9 +166,11 @@ impl fmt::Display for Plicity {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Pat<'arena, Extra = ByteRange> {
     Paren(Extra, &'arena Self),
-    Lit(Extra, Lit<Extra>),
-    Ident(Extra, Symbol),
     Underscore(Extra),
+    Ident(Extra, Symbol),
+    Lit(Extra, Lit<Extra>),
+    RecordLit(Extra, &'arena [PatField<'arena, Extra>]),
+    TupleLit(Extra, &'arena [Self]),
 }
 
 impl<'arena, Extra> Pat<'arena, Extra> {
@@ -174,7 +182,9 @@ impl<'arena, Extra> Pat<'arena, Extra> {
             Pat::Paren(range, ..)
             | Pat::Lit(range, ..)
             | Pat::Ident(range, ..)
-            | Pat::Underscore(range, ..) => range.clone(),
+            | Pat::Underscore(range, ..)
+            | Pat::RecordLit(range, ..)
+            | Pat::TupleLit(range, ..) => range.clone(),
         }
     }
 }
@@ -406,8 +416,8 @@ mod tests {
 
     #[test]
     fn pat_size() {
-        assert_eq!(size_of::<Pat<()>>(), 16);
-        assert_eq!(size_of::<Pat<ByteRange>>(), 24);
+        assert_eq!(size_of::<Pat<()>>(), 24);
+        assert_eq!(size_of::<Pat<ByteRange>>(), 32);
     }
 
     #[test]

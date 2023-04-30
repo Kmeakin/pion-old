@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Add;
 use std::rc::Rc;
 
 type RawIdx = usize;
@@ -7,6 +8,8 @@ type RawIdx = usize;
 pub struct EnvLen(RawIdx);
 
 impl EnvLen {
+    pub fn new() -> Self { Self(0) }
+
     /// Reset the environment to the empty environment.
     pub fn clear(&mut self) { self.0 = 0; }
 
@@ -39,7 +42,7 @@ impl PartialEq<Index> for EnvLen {
     fn eq(&self, other: &Index) -> bool { self.0 == other.0 }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Index(RawIdx);
 
 impl Index {
@@ -50,6 +53,11 @@ impl Index {
     pub fn iter_from(self) -> impl Iterator<Item = Self> { (self.0..).map(Self) }
 
     pub fn next(self) -> Self { Self(self.0 + 1) }
+}
+
+impl Add<EnvLen> for Index {
+    type Output = Self;
+    fn add(self, rhs: EnvLen) -> Self::Output { Self(self.0 + rhs.0) }
 }
 
 impl PartialEq<EnvLen> for Index {

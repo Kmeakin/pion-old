@@ -1,0 +1,9 @@
+exit status: 0
+stdout:
+fun (a : (Type, Type)) => let A : Type = a._0;
+let B : Type = a._1;
+fun (b : (a._0, a._1)) => let x : a._0 = b._0;
+let y : a._1 = b._1;
+x : fun (a : (Type, Type)) -> (a._0, a._1) -> a._0
+
+stderr:

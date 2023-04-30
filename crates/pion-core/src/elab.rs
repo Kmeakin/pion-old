@@ -16,17 +16,17 @@ mod pat;
 pub mod unify;
 
 /// Elaboration context.
-pub struct ElabCtx<'arena, E: FnMut(ElabError)> {
+pub struct ElabCtx<'arena, 'error> {
     scope: &'arena Scope<'arena>,
     prim_env: PrimEnv<'arena>,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
-    on_error: E,
+    on_error: &'error mut dyn FnMut(ElabError),
 }
 
-impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
-    pub fn new(scope: &'arena Scope<'arena>, on_error: E) -> Self {
+impl<'arena, 'error> ElabCtx<'arena, 'error> {
+    pub fn new(scope: &'arena Scope<'arena>, on_error: &'error mut dyn FnMut(ElabError)) -> Self {
         Self {
             scope,
             prim_env: PrimEnv::new(),
@@ -125,7 +125,7 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
 
     /// Run `f`, potentially modifying the local environment, then restore the
     /// local environment to its previous state.
-    fn with_scope<T>(&mut self, mut f: impl FnMut(&mut Self) -> T) -> T {
+    fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         let initial_len = self.local_env.len();
         let result = f(self);
         self.local_env.truncate(initial_len);
@@ -136,22 +136,9 @@ impl<'arena, E: FnMut(ElabError)> ElabCtx<'arena, E> {
         &mut self,
         name: Option<Symbol>,
         r#type: Type<'arena>,
-        mut f: impl FnMut(&mut Self) -> T,
+        f: impl FnOnce(&mut Self) -> T,
     ) -> T {
         self.local_env.push_param(name, r#type);
-        let result = f(self);
-        self.local_env.pop();
-        result
-    }
-
-    fn with_def<T>(
-        &mut self,
-        name: Option<Symbol>,
-        r#type: Type<'arena>,
-        value: Value<'arena>,
-        mut f: impl FnMut(&mut Self) -> T,
-    ) -> T {
-        self.local_env.push_def(name, r#type, value);
         let result = f(self);
         self.local_env.pop();
         result

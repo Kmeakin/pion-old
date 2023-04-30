@@ -1,6 +1,7 @@
 use std::ops::ControlFlow;
 
 use internal_iterator::InternalIterator;
+use pion_source::location::ByteRange;
 use pion_surface::syntax::{Plicity, Symbol};
 use scoped_arena::Scope;
 
@@ -34,6 +35,91 @@ impl<'arena> Expr<'arena> {
         self.subexprs(var)
             .any(|(env, expr)| matches!(expr, Expr::Local(var) if env == *var))
     }
+
+    #[must_use]
+    pub fn shift(&self, scope: &'arena Scope<'arena>, amount: EnvLen) -> Expr<'arena> {
+        self.shift_inner(scope, Index::new(), amount)
+    }
+
+    fn shift_inner(
+        &self,
+        scope: &'arena Scope<'arena>,
+        min: Index,
+        amount: EnvLen,
+    ) -> Expr<'arena> {
+        // Skip traversing and rebuilding the term if it would make no change. Increases
+        // sharing.
+        if amount == EnvLen::new() {
+            return *self;
+        }
+
+        let builder = ExprBuilder::new(scope);
+
+        match self {
+            Expr::Local(var) if *var >= min => Expr::Local(*var + amount),
+
+            Expr::Error
+            | Expr::Lit(_)
+            | Expr::Prim(_)
+            | Expr::Local(_)
+            | Expr::Meta(_)
+            | Expr::InsertedMeta(..) => *self,
+
+            Expr::Let((def, body)) => builder.r#let(
+                LetDef {
+                    name: def.name,
+                    r#type: def.r#type.shift_inner(scope, min, amount),
+                    expr: def.expr.shift_inner(scope, min, amount),
+                },
+                body.shift_inner(scope, min.next(), amount),
+            ),
+            Expr::FunType(plicity, name, (domain, body)) => builder.fun_type(
+                *plicity,
+                *name,
+                domain.shift_inner(scope, min, amount),
+                body.shift_inner(scope, min.next(), amount),
+            ),
+            Expr::FunLit(plicity, name, (domain, body)) => builder.fun_lit(
+                *plicity,
+                *name,
+                domain.shift_inner(scope, min, amount),
+                body.shift_inner(scope, min.next(), amount),
+            ),
+            Expr::FunApp(plicity, (fun, arg)) => builder.fun_app(
+                *plicity,
+                fun.shift_inner(scope, min, amount),
+                arg.shift_inner(scope, min, amount),
+            ),
+            Expr::RecordType(..) => todo!(),
+            Expr::RecordLit(labels, exprs) => {
+                let exprs = exprs
+                    .iter()
+                    .map(|expr| expr.shift_inner(scope, min, amount));
+                let exprs = scope.to_scope_from_iter(exprs);
+                Expr::RecordLit(labels, exprs)
+            }
+            Expr::RecordProj(expr, label) => {
+                builder.record_proj(expr.shift_inner(scope, min, amount), *label)
+            }
+            Expr::Match(scrut, branches, default) => {
+                let scrut = scrut.shift_inner(scope, min, amount);
+                let default = default.map(|(name, expr)| {
+                    (
+                        name,
+                        scope.to_scope(expr.shift_inner(scope, min.next(), amount)) as &_,
+                    )
+                });
+                let branches = branches
+                    .iter()
+                    .map(|(lit, expr)| (*lit, expr.shift_inner(scope, min, amount)));
+                Expr::Match(
+                    scope.to_scope(scrut),
+                    scope.to_scope_from_iter(branches),
+                    default,
+                )
+            }
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -41,6 +127,12 @@ pub struct LetDef<'arena> {
     pub name: Option<Symbol>,
     pub r#type: Expr<'arena>,
     pub expr: Expr<'arena>,
+}
+
+impl<'arena> LetDef<'arena> {
+    pub fn new(name: Option<Symbol>, r#type: Expr<'arena>, expr: Expr<'arena>) -> Self {
+        Self { name, r#type, expr }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -160,22 +252,42 @@ pub enum SplitCases<'arena, P> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Pat<'arena> {
-    Error(&'arena ()),
-    Lit(Lit),
-    Ident(Symbol),
-    Ignore,
+pub enum Pat<'arena, Extra = ByteRange> {
+    Error(Extra),
+    Ignore(Extra),
+    Ident(Extra, Symbol),
+    Lit(Extra, Lit),
+    RecordLit(Extra, &'arena [Symbol], &'arena [Self]),
 }
 
-impl<'arena> Pat<'arena> {
+impl<'arena, Extra> Pat<'arena, Extra> {
+    pub fn range(&self) -> Extra
+    where
+        Extra: Clone,
+    {
+        match self {
+            Pat::Error(range, ..)
+            | Pat::Ignore(range, ..)
+            | Pat::Ident(range, ..)
+            | Pat::Lit(range, ..)
+            | Pat::RecordLit(range, ..) => range.clone(),
+        }
+    }
+
     pub fn name(&self) -> Option<Symbol> {
         match self {
-            Pat::Ident(name) => Some(*name),
+            Pat::Ident(_, name) => Some(*name),
             _ => None,
         }
     }
 
-    pub fn is_err(&self) -> bool { matches!(self, Self::Error(_)) }
+    pub fn is_err(&self) -> bool { matches!(self, Self::Error(..)) }
+
+    /// Returns `true` if `self` is a "wildcard" pattern - ie always matches its
+    /// scrutinee
+    pub fn is_wildcard(&self) -> bool {
+        matches!(self, Pat::Error(..) | Pat::Ignore(..) | Pat::Ident(..))
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -201,6 +313,11 @@ mod tests {
     #[test]
     fn expr_size() {
         assert_eq!(size_of::<Expr>(), 48);
+    }
+
+    #[test]
+    fn pat_size() {
+        assert_eq!(size_of::<Pat>(), 48);
     }
 
     #[test]
@@ -314,6 +431,16 @@ impl<'arena> ExprBuilder<'arena> {
 
     pub fn r#let(&self, def: LetDef<'arena>, body: Expr<'arena>) -> Expr<'arena> {
         Expr::Let(self.scope.to_scope((def, body)))
+    }
+
+    pub fn lets<I>(&self, defs: I, body: Expr<'arena>) -> Expr<'arena>
+    where
+        I: IntoIterator<Item = LetDef<'arena>>,
+        I::IntoIter: DoubleEndedIterator,
+    {
+        defs.into_iter().rev().fold(body, |body, def| {
+            Expr::Let(self.scope.to_scope((def, body)))
+        })
     }
 
     pub fn fun_lit(
