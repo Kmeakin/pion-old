@@ -80,15 +80,14 @@ pub fn compile_match<'arena>(
                             {
                                 Some((*name, body))
                             }
-                            _ => Some((None, ctx.scope.to_scope(body) as &_)),
+                            _ => Some((None, body)),
                         }
                     }
                 };
 
                 return Expr::Match(
-                    ctx.scope.to_scope(scrut_expr),
+                    ctx.scope.to_scope((scrut_expr, default_branch)),
                     ctx.scope.to_scope_from_iter(branches),
-                    default_branch,
                 );
             }
 

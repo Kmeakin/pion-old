@@ -89,7 +89,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 let head = self.eval(head);
                 self.elim_env.record_proj(head, *label)
             }
-            Expr::Match(scrut, cases, default) => {
+            Expr::Match((scrut, default), cases) => {
                 let scrut = self.eval(scrut);
                 let cases = Cases::new(self.local_values.clone(), cases, *default);
                 self.elim_env.match_scrut(scrut, cases)
@@ -194,16 +194,14 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 Left(head) => Left(expr_builder.record_proj(head, *label)),
                 Right(head_value) => Right(self.elim_env.record_proj(head_value, *label)),
             },
-            Expr::Match(scrut, cases, default) => match self.zonk_meta_var_spines(scrut) {
-                Left(scrut) => Left(Expr::Match(
-                    self.scope.to_scope(scrut),
-                    self.scope.to_scope_from_iter(
+            Expr::Match((scrut, default), cases) => match self.zonk_meta_var_spines(scrut) {
+                Left(scrut) => {
+                    let cases = self.scope.to_scope_from_iter(
                         cases.iter().map(|(lit, expr)| (*lit, self.zonk(expr))),
-                    ),
-                    default.map(|(name, expr)| {
-                        (name, self.scope.to_scope(self.zonk_with_local(expr)) as &_)
-                    }),
-                )),
+                    );
+                    let default = default.map(|(name, expr)| (name, self.zonk_with_local(&expr)));
+                    Left(Expr::Match(self.scope.to_scope((scrut, default)), cases))
+                }
                 Right(scrut) => {
                     let cases = Cases::new(self.local_values.clone(), cases, *default);
                     Right(self.elim_env.match_scrut(scrut, cases))
@@ -328,7 +326,7 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
                 match cases.default_case {
                     Some((_, expr)) => {
                         cases.local_values.push(scrut);
-                        self.eval_env(&mut cases.local_values).eval(expr)
+                        self.eval_env(&mut cases.local_values).eval(&expr)
                     }
                     None => panic!("Bad scrut match: inexhaustive cases"),
                 }
@@ -433,9 +431,8 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
                             }
                         };
                         Expr::Match(
-                            self.scope.to_scope(head),
+                            self.scope.to_scope((head, default)),
                             self.scope.to_scope_from_iter(pattern_cases),
-                            default.map(|(name, expr)| (name, self.scope.to_scope(expr) as &_)),
                         )
                     }
                 })

@@ -24,9 +24,8 @@ pub enum Expr<'arena> {
     RecordLit(&'arena [Symbol], &'arena [Self]),
     RecordProj(&'arena Self, Symbol),
     Match(
-        &'arena Self,
+        &'arena (Self, Option<(Option<Symbol>, Self)>),
         &'arena [(Lit, Self)],
-        Option<(Option<Symbol>, &'arena Self)>,
     ),
 }
 
@@ -101,21 +100,16 @@ impl<'arena> Expr<'arena> {
             Expr::RecordProj(expr, label) => {
                 builder.record_proj(expr.shift_inner(scope, min, amount), *label)
             }
-            Expr::Match(scrut, branches, default) => {
+            Expr::Match((scrut, default), branches) => {
                 let scrut = scrut.shift_inner(scope, min, amount);
-                let default = default.map(|(name, expr)| {
-                    (
-                        name,
-                        scope.to_scope(expr.shift_inner(scope, min.next(), amount)) as &_,
-                    )
-                });
+                let default =
+                    default.map(|(name, expr)| (name, expr.shift_inner(scope, min.next(), amount)));
                 let branches = branches
                     .iter()
                     .map(|(lit, expr)| (*lit, expr.shift_inner(scope, min, amount)));
                 Expr::Match(
-                    scope.to_scope(scrut),
+                    scope.to_scope((scrut, default)),
                     scope.to_scope_from_iter(branches),
-                    default,
                 )
             }
         }
@@ -225,14 +219,14 @@ impl<'arena> Telescope<'arena> {
 pub struct Cases<'arena, P> {
     pub local_values: SharedEnv<Value<'arena>>,
     pub pattern_cases: &'arena [(P, Expr<'arena>)],
-    pub default_case: Option<(Option<Symbol>, &'arena Expr<'arena>)>,
+    pub default_case: Option<(Option<Symbol>, Expr<'arena>)>,
 }
 
 impl<'arena, P> Cases<'arena, P> {
     pub fn new(
         local_values: SharedEnv<Value<'arena>>,
         pattern_cases: &'arena [(P, Expr<'arena>)],
-        default_case: Option<(Option<Symbol>, &'arena Expr<'arena>)>,
+        default_case: Option<(Option<Symbol>, Expr<'arena>)>,
     ) -> Self {
         Self {
             local_values,
@@ -312,7 +306,7 @@ mod tests {
 
     #[test]
     fn expr_size() {
-        assert_eq!(size_of::<Expr>(), 48);
+        assert_eq!(size_of::<Expr>(), 40);
     }
 
     #[test]
@@ -403,7 +397,7 @@ impl<'a, 'arena> Subexprs<'a, 'arena> {
                 }
             }
             Expr::RecordProj(head, ..) => self.helper(head, f)?,
-            Expr::Match(scrut, cases, default) => {
+            Expr::Match((scrut, default), cases) => {
                 self.helper(scrut, f)?;
 
                 for (_, expr) in cases.iter() {
@@ -478,10 +472,9 @@ impl<'arena> ExprBuilder<'arena> {
         r#else: Expr<'arena>,
     ) -> Expr<'arena> {
         Expr::Match(
-            self.scope.to_scope(cond),
+            self.scope.to_scope((cond, None)),
             self.scope
                 .to_scope_from_iter([(Lit::Bool(false), r#else), (Lit::Bool(true), then)]),
-            None,
         )
     }
 }

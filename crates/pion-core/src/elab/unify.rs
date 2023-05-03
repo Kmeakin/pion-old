@@ -571,9 +571,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                             }
                         };
                         Ok(Expr::Match(
-                            self.scope.to_scope(head),
+                            self.scope.to_scope((head, default)),
                             self.scope.to_scope_from_iter(pattern_cases),
-                            default.map(|(name, expr)| (name, self.scope.to_scope(expr) as &_)),
                         ))
                     }
                 })
