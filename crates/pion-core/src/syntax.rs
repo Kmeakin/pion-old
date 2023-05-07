@@ -43,7 +43,7 @@ impl<'arena> Expr<'arena> {
     fn shift_inner(
         &self,
         scope: &'arena Scope<'arena>,
-        min: Index,
+        mut min: Index,
         amount: EnvLen,
     ) -> Expr<'arena> {
         // Skip traversing and rebuilding the term if it would make no change. Increases
@@ -89,7 +89,15 @@ impl<'arena> Expr<'arena> {
                 fun.shift_inner(scope, min, amount),
                 arg.shift_inner(scope, min, amount),
             ),
-            Expr::RecordType(..) => todo!(),
+            Expr::RecordType(labels, types) => {
+                let types = types.iter().map(|expr| {
+                    let ret = expr.shift_inner(scope, min, amount);
+                    min = min.next();
+                    ret
+                });
+                let types = scope.to_scope_from_iter(types);
+                Expr::RecordType(labels, types)
+            }
             Expr::RecordLit(labels, exprs) => {
                 let exprs = exprs
                     .iter()
@@ -219,14 +227,14 @@ impl<'arena> Telescope<'arena> {
 pub struct Cases<'arena, P> {
     pub local_values: SharedEnv<Value<'arena>>,
     pub pattern_cases: &'arena [(P, Expr<'arena>)],
-    pub default_case: Option<(Option<Symbol>, Expr<'arena>)>,
+    pub default_case: &'arena Option<(Option<Symbol>, Expr<'arena>)>,
 }
 
 impl<'arena, P> Cases<'arena, P> {
     pub fn new(
         local_values: SharedEnv<Value<'arena>>,
         pattern_cases: &'arena [(P, Expr<'arena>)],
-        default_case: Option<(Option<Symbol>, Expr<'arena>)>,
+        default_case: &'arena Option<(Option<Symbol>, Expr<'arena>)>,
     ) -> Self {
         Self {
             local_values,

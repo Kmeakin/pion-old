@@ -91,7 +91,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
             }
             Expr::Match((scrut, default), cases) => {
                 let scrut = self.eval(scrut);
-                let cases = Cases::new(self.local_values.clone(), cases, *default);
+                let cases = Cases::new(self.local_values.clone(), cases, default);
                 self.elim_env.match_scrut(scrut, cases)
             }
         }
@@ -203,7 +203,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                     Left(Expr::Match(self.scope.to_scope((scrut, default)), cases))
                 }
                 Right(scrut) => {
-                    let cases = Cases::new(self.local_values.clone(), cases, *default);
+                    let cases = Cases::new(self.local_values.clone(), cases, default);
                     Right(self.elim_env.match_scrut(scrut, cases))
                 }
             },
@@ -326,7 +326,7 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
                 match cases.default_case {
                     Some((_, expr)) => {
                         cases.local_values.push(scrut);
-                        self.eval_env(&mut cases.local_values).eval(&expr)
+                        self.eval_env(&mut cases.local_values).eval(expr)
                     }
                     None => panic!("Bad scrut match: inexhaustive cases"),
                 }
@@ -373,7 +373,12 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
                     cases,
                 )
             }
-            None => todo!(),
+            None => match cases.default_case {
+                Some((name, expr)) => {
+                    SplitCases::Default(*name, Closure::new(cases.local_values, expr))
+                }
+                None => SplitCases::None,
+            },
         }
     }
 }
