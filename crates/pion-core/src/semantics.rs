@@ -61,16 +61,14 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 body_value
             }
             Expr::FunType(plicity, name, (domain, codomain)) => {
-                let scope = self.scope;
                 let domain_value = self.eval(domain);
                 let codomain = Closure::new(self.local_values.clone(), codomain);
-                Value::FunType(*plicity, *name, scope.to_scope(domain_value), codomain)
+                Value::FunType(*plicity, *name, self.scope.to_scope(domain_value), codomain)
             }
             Expr::FunLit(plicity, name, (domain, body)) => {
-                let scope = self.scope;
                 let type_value = self.eval(domain);
                 let body = Closure::new(self.local_values.clone(), body);
-                Value::FunLit(*plicity, *name, scope.to_scope(type_value), body)
+                Value::FunLit(*plicity, *name, self.scope.to_scope(type_value), body)
             }
             Expr::FunApp(plicity, (fun, arg)) => {
                 let fun_value = self.eval(fun);
@@ -152,8 +150,7 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
             }
             Expr::RecordLit(labels, exprs) => Expr::RecordLit(
                 labels,
-                self.elim_env
-                    .scope
+                self.scope
                     .to_scope_from_iter(exprs.iter().map(|expr| self.zonk(expr))),
             ),
         }
@@ -410,7 +407,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
     fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.scope) }
 
     /// Quote a [value][Value] back into a [expr][Expr].
-    pub fn quote(&mut self, value: &Value) -> Expr<'arena> {
+    pub fn quote(&mut self, value: &Value<'arena>) -> Expr<'arena> {
         let value = self.elim_env.update_metas(value);
         let expr_builder = self.expr_builder();
         match value {
@@ -455,15 +452,12 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
             }
             Value::RecordType(labels, telescope) => {
                 let types = self.quote_telescope(telescope);
-                Expr::RecordType(self.scope.to_scope_from_iter(labels.iter().copied()), types)
+                Expr::RecordType(labels, types)
             }
             Value::RecordLit(labels, values) => {
                 let scope = self.scope;
                 let values = values.iter().map(|value| self.quote(value));
-                Expr::RecordLit(
-                    scope.to_scope_from_iter(labels.iter().copied()),
-                    scope.to_scope_from_iter(values),
-                )
+                Expr::RecordLit(labels, scope.to_scope_from_iter(values))
             }
         }
     }
@@ -486,7 +480,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
     }
 
     /// Quote a [closure][Closure] back into an [expr][Expr].
-    fn quote_closure(&mut self, closure: &Closure) -> Expr<'arena> {
+    fn quote_closure(&mut self, closure: &Closure<'arena>) -> Expr<'arena> {
         let arg = Value::local(self.local_env.to_level());
         let value = self.elim_env.apply_closure(closure.clone(), arg);
 
@@ -498,7 +492,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
     }
 
     /// Quote a [telescope][Telescope] back into a slice of [exprs][Expr].
-    fn quote_telescope(&mut self, telescope: Telescope) -> &'arena [Expr<'arena>] {
+    fn quote_telescope(&mut self, telescope: Telescope<'arena>) -> &'arena [Expr<'arena>] {
         let initial_local_len = self.local_env;
         let mut telescope = telescope;
         let mut exprs = SliceVec::new(self.scope, telescope.len());
