@@ -18,6 +18,7 @@ pub mod unify;
 /// Elaboration context.
 pub struct ElabCtx<'arena, 'message> {
     scope: &'arena Scope<'arena>,
+    temp_scope: Scope<'arena>,
     prim_env: PrimEnv<'arena>,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
@@ -29,6 +30,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
     pub fn new(scope: &'arena Scope<'arena>, on_message: &'message mut dyn FnMut(Message)) -> Self {
         Self {
             scope,
+            temp_scope: Scope::new(),
             prim_env: PrimEnv::new(),
             local_env: LocalEnv::default(),
             meta_env: MetaEnv::default(),
@@ -116,9 +118,20 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
     }
 
     fn pretty_value(&mut self, value: &Value) -> String {
-        let expr = self.quote_env().quote(value);
-        let surface_expr = self.distill_ctx().expr(&expr);
-        let ctx = pion_surface::pretty::PrettyCtx::new(self.scope);
+        let mut proxy = self.temp_scope.proxy();
+        let temp_scope = proxy.scope();
+
+        let elim_env = ElimEnv::new(self.scope, &self.meta_env.values);
+        let mut quote_env = QuoteEnv::new(&temp_scope, elim_env, self.local_env.values.len());
+        let mut distill_ctx = DistillCtx::new(
+            &temp_scope,
+            &mut self.local_env.names,
+            &self.meta_env.sources,
+        );
+
+        let expr = quote_env.quote(value);
+        let surface_expr = distill_ctx.expr(&expr);
+        let ctx = pion_surface::pretty::PrettyCtx::new(&temp_scope);
         let doc = ctx.expr(&surface_expr);
         doc.pretty(usize::MAX).to_string()
     }
