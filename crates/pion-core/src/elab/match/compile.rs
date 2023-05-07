@@ -20,27 +20,28 @@ pub fn compile_match<'arena>(
     // Base case 2:
     // If the first row is all wildcards, matching always suceeds.
     if matrix.row(0).all_wildcards() {
+        let scope = ctx.scope;
         let index = matrix.row_index(0);
-        let Body { expr, defs } = &bodies[index];
+        let Body { expr: body, defs } = &bodies[index];
 
         let initial_len = ctx.local_env.len();
-        #[allow(clippy::needless_collect)]
-        let defs: Vec<_> = defs
-            .iter()
-            .map(|(def_name, scrut)| {
-                let def_name = *def_name;
-                let def_type = ctx.quote_env().quote(&scrut.r#type);
-                let def_expr = scrut.expr.shift(ctx.scope, shift_amount);
-                let def_value = ctx.eval_env().eval(&def_expr);
-                ctx.local_env
-                    .push_def(def_name, def_value, scrut.r#type.clone());
-                shift_amount.push();
-                LetDef::new(def_name, def_type, def_expr)
-            })
-            .collect();
-
+        let defs = defs.iter().map(|(def_name, scrut)| {
+            let def_name = *def_name;
+            let def_type = ctx.quote_env().quote(&scrut.r#type);
+            let def_expr = scrut.expr.shift(ctx.scope, shift_amount);
+            let def_value = ctx.eval_env().eval(&def_expr);
+            ctx.local_env
+                .push_def(def_name, def_value, scrut.r#type.clone());
+            shift_amount.push();
+            (LetDef::new(def_name, def_type, def_expr), Expr::Error)
+        });
+        let defs = scope.to_scope_from_iter(defs);
         ctx.local_env.truncate(initial_len);
-        return ctx.expr_builder().lets(defs, *expr);
+
+        return defs.iter_mut().rev().fold(*body, |body, pair| {
+            pair.1 = body;
+            Expr::Let(pair)
+        });
     }
 
     // Inductive case:
