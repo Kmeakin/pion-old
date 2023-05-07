@@ -1,4 +1,5 @@
 use either::*;
+use pion_common::slice_vec::SliceVec;
 use pion_surface::syntax::{Plicity, Symbol};
 use scoped_arena::Scope;
 
@@ -500,7 +501,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
     fn quote_telescope(&mut self, telescope: Telescope) -> &'arena [Expr<'arena>] {
         let initial_local_len = self.local_env;
         let mut telescope = telescope;
-        let mut exprs = Vec::with_capacity(telescope.len());
+        let mut exprs = SliceVec::new(self.scope, telescope.len());
 
         while let Some((value, cont)) = self.elim_env.split_telescope(telescope) {
             let var = Value::local(self.local_env.to_level());
@@ -510,7 +511,7 @@ impl<'arena, 'env> QuoteEnv<'arena, 'env> {
         }
 
         self.local_env.truncate(initial_local_len);
-        self.scope.to_scope_from_iter(exprs)
+        exprs.into()
     }
 
     fn push_local(&mut self) { self.local_env.push(); }

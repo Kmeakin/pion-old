@@ -1,3 +1,4 @@
+use pion_common::slice_vec::SliceVec;
 use pion_surface::syntax::Plicity;
 
 use super::*;
@@ -592,16 +593,13 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                 Ok(Expr::RecordType(labels, types))
             }
             Value::RecordLit(labels, values) => {
-                let mut exprs = Vec::with_capacity(values.len());
+                let mut exprs = SliceVec::new(self.scope, values.len());
 
                 for value in values.iter() {
                     exprs.push(self.rename(meta_var, value)?);
                 }
 
-                Ok(Expr::RecordLit(
-                    labels,
-                    self.scope.to_scope_from_iter(exprs),
-                ))
+                Ok(Expr::RecordLit(labels, exprs.into()))
             }
         }
     }
@@ -630,7 +628,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     ) -> Result<&'arena [Expr<'arena>], RenameError> {
         let initial_renaming_len = self.renaming.len();
         let mut telescope = telescope;
-        let mut exprs = Vec::with_capacity(telescope.len());
+        let mut exprs = SliceVec::new(self.scope, telescope.len());
 
         while let Some((value, cont)) = self.elim_env().split_telescope(telescope) {
             match self.rename(meta_var, &value) {
@@ -648,6 +646,6 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
         }
 
         self.renaming.truncate(initial_renaming_len);
-        Ok(self.scope.to_scope_from_iter(exprs))
+        Ok(exprs.into())
     }
 }

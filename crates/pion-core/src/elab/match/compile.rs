@@ -1,3 +1,5 @@
+use pion_common::slice_vec::SliceVec;
+
 use super::*;
 
 /// Compilation of pattern matrices to decision trees.
@@ -54,7 +56,7 @@ pub fn compile_match<'arena>(
                 let scrut_expr = scrut.expr.shift(ctx.scope, shift_amount);
                 let ctors = matrix.column_constructors(0);
 
-                let mut branches = Vec::with_capacity(ctors.len());
+                let mut branches = SliceVec::new(ctx.scope, ctors.len());
                 for ctor in &ctors {
                     let lit = ctor.as_lit().unwrap();
                     let mut matrix = matrix.specialize(ctx, ctor);
@@ -87,7 +89,7 @@ pub fn compile_match<'arena>(
 
                 return Expr::Match(
                     ctx.scope.to_scope((scrut_expr, default_branch)),
-                    ctx.scope.to_scope_from_iter(branches),
+                    branches.into(),
                 );
             }
 

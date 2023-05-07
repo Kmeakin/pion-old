@@ -1,3 +1,4 @@
+use pion_common::slice_vec::SliceVec;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::Plicity;
 
@@ -166,8 +167,9 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 (expr, r#type)
             }
             surface::Expr::RecordType(_, fields) => {
-                let mut labels = Vec::with_capacity(fields.len());
-                let mut types = Vec::with_capacity(fields.len());
+                let mut label_ranges = Vec::with_capacity(fields.len());
+                let mut labels = SliceVec::new(self.scope, fields.len());
+                let mut types = SliceVec::new(self.scope, fields.len());
 
                 self.with_scope(|this| {
                     for field in fields.iter() {
@@ -175,67 +177,61 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                         let type_value = this.eval_env().eval(&r#type);
 
                         let (label_range, label) = field.label;
-                        if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
+                        if let Some(idx) = labels.iter().position(|l| *l == label) {
                             this.emit_message(Message::RecordFieldDuplicate {
                                 name: "record type",
                                 label,
-                                first_range: *first_range,
+                                first_range: label_ranges[idx],
                                 duplicate_range: label_range,
                             });
                         } else {
                             this.local_env.push_param(Some(label), type_value);
-                            labels.push((label_range, label));
+                            labels.push(label);
+                            label_ranges.push(label_range);
                             types.push(r#type);
                         }
                     }
                 });
 
-                let labels = self
-                    .scope
-                    .to_scope_from_iter(labels.iter().map(|(_, label)| *label));
-                let types = self.scope.to_scope_from_iter(types);
-                (Expr::RecordType(labels, types), Type::TYPE)
+                (Expr::RecordType(labels.into(), types.into()), Type::TYPE)
             }
             surface::Expr::RecordLit(_, fields) => {
-                let mut labels = Vec::with_capacity(fields.len());
-                let mut exprs = Vec::with_capacity(fields.len());
-                let mut types = Vec::with_capacity(fields.len());
+                let mut label_ranges = Vec::with_capacity(fields.len());
+                let mut labels = SliceVec::new(self.scope, fields.len());
+                let mut exprs = SliceVec::new(self.scope, fields.len());
+                let mut types = SliceVec::new(self.scope, fields.len());
 
                 for field in fields.iter() {
                     let (expr, type_value) = self.synth(&field.expr);
                     let r#type = self.quote_env().quote(&type_value);
 
                     let (label_range, label) = field.label;
-                    if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
+                    if let Some(idx) = labels.iter().position(|l| *l == label) {
                         self.emit_message(Message::RecordFieldDuplicate {
                             name: "record literal",
                             label,
-                            first_range: *first_range,
+                            first_range: label_ranges[idx],
                             duplicate_range: label_range,
                         });
                     } else {
-                        labels.push((label_range, label));
+                        label_ranges.push(label_range);
+                        labels.push(label);
                         exprs.push(expr);
                         types.push(r#type);
                     }
                 }
 
-                let labels = self
-                    .scope
-                    .to_scope_from_iter(labels.iter().map(|(_, label)| *label));
-                let exprs = self.scope.to_scope_from_iter(exprs);
-                let types = self.scope.to_scope_from_iter(types);
-
-                let telescope = Telescope::new(self.local_env.values.clone(), types);
+                let labels = labels.into();
+                let telescope = Telescope::new(self.local_env.values.clone(), types.into());
                 (
-                    Expr::RecordLit(labels, exprs),
+                    Expr::RecordLit(labels, exprs.into()),
                     Value::RecordType(labels, telescope),
                 )
             }
             surface::Expr::TupleLit(_, elems) => {
-                let mut labels = Vec::with_capacity(elems.len());
-                let mut exprs = Vec::with_capacity(elems.len());
-                let mut types = Vec::with_capacity(elems.len());
+                let mut labels = SliceVec::new(self.scope, elems.len());
+                let mut exprs = SliceVec::new(self.scope, elems.len());
+                let mut types = SliceVec::new(self.scope, elems.len());
 
                 for (idx, expr) in elems.iter().enumerate() {
                     let (expr, type_value) = self.synth(expr);
@@ -245,13 +241,10 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                     types.push(r#type);
                 }
 
-                let labels = self.scope.to_scope_from_iter(labels);
-                let exprs = self.scope.to_scope_from_iter(exprs);
-                let types = self.scope.to_scope_from_iter(types);
-
-                let telescope = Telescope::new(self.local_env.values.clone(), types);
+                let labels = labels.into();
+                let telescope = Telescope::new(self.local_env.values.clone(), types.into());
                 (
-                    Expr::RecordLit(labels, exprs),
+                    Expr::RecordLit(labels, exprs.into()),
                     Value::RecordType(labels, telescope),
                 )
             }
@@ -597,8 +590,8 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 self.convert(expr.range(), synth_expr, &synth_type, &expected)
             }
             (surface::Expr::TupleLit(_, elems), _) if expected.is_type() => {
-                let mut labels = Vec::with_capacity(elems.len());
-                let mut types = Vec::with_capacity(elems.len());
+                let mut labels = SliceVec::new(self.scope, elems.len());
+                let mut types = SliceVec::new(self.scope, elems.len());
 
                 self.with_scope(|this| {
                     for (idx, expr) in elems.iter().enumerate() {
@@ -610,10 +603,8 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                         this.local_env.push_param(None, type_value);
                     }
                 });
-                let labels = self.scope.to_scope_from_iter(labels);
-                let types = self.scope.to_scope_from_iter(types);
 
-                Expr::RecordType(labels, types)
+                Expr::RecordType(labels.into(), types.into())
             }
             (surface::Expr::RecordLit(_, fields), Value::RecordType(labels, telescope))
                 if Iterator::eq(
@@ -623,7 +614,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             {
                 let mut telescope = telescope.clone();
                 let mut fields = fields.iter();
-                let mut exprs = Vec::with_capacity(telescope.len());
+                let mut exprs = SliceVec::new(self.scope, telescope.len());
 
                 while let Some((field, (r#type, cont))) =
                     Option::zip(fields.next(), self.elim_env().split_telescope(telescope))
@@ -633,7 +624,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                     exprs.push(expr);
                 }
 
-                Expr::RecordLit(labels, self.scope.to_scope_from_iter(exprs))
+                Expr::RecordLit(labels, exprs.into())
             }
             (surface::Expr::Match(range, scrut, cases), _) => {
                 self.check_match(*range, scrut, cases, &expected)
