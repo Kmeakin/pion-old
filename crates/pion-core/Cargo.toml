@@ -11,5 +11,5 @@ pion-source = { version = "0.1.0", path = "../pion-source" }
 pion-surface = { version = "0.1.0", path = "../pion-surface" }
 ustr = "0.9.0"
 codespan-reporting = "0.11.1"
-internal-iterator = "0.2.0"
+internal-iterator = "0.2.1"
 either = "1.8.1"

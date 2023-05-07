@@ -253,7 +253,7 @@ impl SyntaxError {
             Self::Lexer(err) => err.range(),
             Self::IntLit(range, ..)
             | Self::InvalidToken(range, ..)
-            | Self::UnrecognizedEOF { range, .. }
+            | Self::UnrecognizedEof { range, .. }
             | Self::UnrecognizedToken { range, .. }
             | Self::ExtraToken { range, .. } => *range,
         }
@@ -264,9 +264,9 @@ impl SyntaxError {
             LalrpopParseError::InvalidToken { location } => {
                 Self::InvalidToken(ByteRange::new(location, location))
             }
-            LalrpopParseError::UnrecognizedEOF { location, expected } => {
+            LalrpopParseError::UnrecognizedEof { location, expected } => {
                 let range = ByteRange::new(location, location);
-                Self::UnrecognizedEOF {
+                Self::UnrecognizedEof {
                     range,
                     expected_tokens: expected.into_boxed_slice(),
                 }

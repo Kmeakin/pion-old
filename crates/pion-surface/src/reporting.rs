@@ -19,7 +19,7 @@ pub enum SyntaxError {
     Lexer(TokenError),
     IntLit(ByteRange, lexical::Error),
     InvalidToken(ByteRange),
-    UnrecognizedEOF {
+    UnrecognizedEof {
         range: ByteRange,
         expected_tokens: Box<[String]>,
     },
@@ -58,7 +58,7 @@ impl SyntaxError {
             Self::InvalidToken(range) => Diagnostic::error()
                 .with_message("invalid token")
                 .with_labels(vec![primary_label(range)]),
-            Self::UnrecognizedEOF {
+            Self::UnrecognizedEof {
                 range,
                 expected_tokens,
             } => Diagnostic::error()
