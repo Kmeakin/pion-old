@@ -1,3 +1,5 @@
+use pion_common::slice_vec::SliceVec;
+
 use super::expr::synth_lit;
 use super::r#match::Scrut;
 use super::*;
@@ -66,9 +68,10 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 (Pat::Ignore(range), r#type)
             }
             surface::Pat::RecordLit(_, fields) => {
-                let mut labels = Vec::with_capacity(fields.len());
-                let mut pats = Vec::with_capacity(fields.len());
-                let mut types = Vec::with_capacity(fields.len());
+                let mut label_ranges = Vec::with_capacity(fields.len());
+                let mut labels = SliceVec::new(self.scope, fields.len());
+                let mut pats = SliceVec::new(self.scope, fields.len());
+                let mut types = SliceVec::new(self.scope, fields.len());
 
                 let initial_len = self.local_env.len();
                 for field in fields.iter() {
@@ -76,15 +79,16 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                     let r#type = self.quote_env().quote(&type_value);
 
                     let (label_range, label) = field.label;
-                    if let Some((first_range, _)) = labels.iter().find(|(_, l)| *l == label) {
+                    if let Some(idx) = labels.iter().position(|l| *l == label) {
                         self.emit_message(Message::RecordFieldDuplicate {
                             name: "record literal",
                             label,
-                            first_range: *first_range,
+                            first_range: label_ranges[idx],
                             duplicate_range: label_range,
                         });
                     } else {
-                        labels.push((label_range, label));
+                        label_ranges.push(label_range);
+                        labels.push(label);
                         pats.push(pat);
                         types.push(r#type);
                         self.local_env.push_param(Some(label), type_value);
@@ -92,22 +96,17 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 }
                 self.local_env.truncate(initial_len);
 
-                let labels = self
-                    .scope
-                    .to_scope_from_iter(labels.iter().map(|(_, label)| *label));
-                let pats = self.scope.to_scope_from_iter(pats);
-                let types = self.scope.to_scope_from_iter(types);
-
-                let telescope = Telescope::new(self.local_env.values.clone(), types);
+                let labels = labels.into();
+                let telescope = Telescope::new(self.local_env.values.clone(), types.into());
                 (
-                    Pat::RecordLit(range, labels, pats),
+                    Pat::RecordLit(range, labels, pats.into()),
                     Value::RecordType(labels, telescope),
                 )
             }
             surface::Pat::TupleLit(_, elems) => {
-                let mut labels = Vec::with_capacity(elems.len());
-                let mut pats = Vec::with_capacity(elems.len());
-                let mut types = Vec::with_capacity(elems.len());
+                let mut labels = SliceVec::new(self.scope, elems.len());
+                let mut pats = SliceVec::new(self.scope, elems.len());
+                let mut types = SliceVec::new(self.scope, elems.len());
 
                 let initial_len = self.local_env.len();
                 for (idx, pat) in elems.iter().enumerate() {
@@ -121,13 +120,10 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 }
                 self.local_env.truncate(initial_len);
 
-                let labels = self.scope.to_scope_from_iter(labels);
-                let pats = self.scope.to_scope_from_iter(pats);
-                let types = self.scope.to_scope_from_iter(types);
-
-                let telescope = Telescope::new(self.local_env.values.clone(), types);
+                let labels = labels.into();
+                let telescope = Telescope::new(self.local_env.values.clone(), types.into());
                 (
-                    Pat::RecordLit(range, labels, pats),
+                    Pat::RecordLit(range, labels, pats.into()),
                     Value::RecordType(labels, telescope),
                 )
             }
