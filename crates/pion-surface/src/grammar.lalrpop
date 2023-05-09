@@ -48,7 +48,15 @@ extern {
     }
 }
 
-pub Def: Def<'arena> = {
+pub Module: Module<'arena> = {
+    <items: Item*> => Module { items: scope.to_scope_from_iter(items) }
+}
+
+Item: Item<'arena> = {
+    <def: Def> => Item::Def(def),
+}
+
+Def: Def<'arena> = {
     <start: @L> "def" <name: Ident> <r#type: Ann?> "=" <expr: Expr> ";" <end: @R> => builder.def((start, end), name, r#type, expr),
 }
 
