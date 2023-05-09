@@ -1,3 +1,4 @@
+use pion_common::slice_vec::SliceVec;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::{self as surface, Symbol};
 use scoped_arena::Scope;
@@ -294,4 +295,59 @@ pub enum MetaSource {
     ImplicitArg(ByteRange, Option<Symbol>),
 
     MatchType(ByteRange),
+}
+
+pub fn elab_module<'arena>(
+    module: &surface::Module,
+    scope: &'arena Scope<'arena>,
+    on_message: &'_ mut dyn FnMut(Message),
+) -> Module<'arena> {
+    let mut items = SliceVec::new(scope, module.items.len());
+
+    for item in module.items {
+        let item = match item {
+            surface::Item::Def(def) => {
+                let surface::Def {
+                    name, r#type, expr, ..
+                } = def;
+                let mut elab_ctx = ElabCtx::new(scope, on_message);
+
+                match r#type {
+                    None => {
+                        let (expr, r#type) = elab_ctx.synth(expr);
+                        let r#type = elab_ctx.quote_env().quote(&r#type);
+
+                        let expr = elab_ctx.eval_env().zonk(&expr);
+                        let r#type = elab_ctx.eval_env().zonk(&r#type);
+
+                        Item::Def(Def {
+                            name: *name,
+                            r#type,
+                            expr,
+                        })
+                    }
+                    Some(r#type) => {
+                        let r#type = elab_ctx.check(r#type, &Type::TYPE);
+                        let type_value = elab_ctx.eval_env().eval(&r#type);
+                        let expr = elab_ctx.check(expr, &type_value);
+
+                        let expr = elab_ctx.eval_env().zonk(&expr);
+                        let r#type = elab_ctx.eval_env().zonk(&r#type);
+
+                        Item::Def(Def {
+                            name: *name,
+                            r#type,
+                            expr,
+                        })
+                    }
+                }
+            }
+        };
+
+        items.push(item);
+    }
+
+    Module {
+        items: items.into(),
+    }
 }

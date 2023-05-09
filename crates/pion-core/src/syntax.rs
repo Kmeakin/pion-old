@@ -9,6 +9,23 @@ use crate::env::{EnvLen, Index, Level, SharedEnv};
 use crate::prim::Prim;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Module<'arena> {
+    pub items: &'arena [Item<'arena>],
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Item<'arena> {
+    Def(Def<'arena>),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Def<'arena> {
+    pub name: Symbol,
+    pub r#type: Expr<'arena>,
+    pub expr: Expr<'arena>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Expr<'arena> {
     Error,
     Lit(Lit),

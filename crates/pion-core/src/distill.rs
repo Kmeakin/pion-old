@@ -87,6 +87,30 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
         }
     }
 
+    pub fn module(&mut self, module: &Module<'_>) -> surface::Module<'arena, ()> {
+        surface::Module {
+            items: (self.scope).to_scope_from_iter(module.items.iter().map(|item| self.item(item))),
+        }
+    }
+
+    fn item(&mut self, item: &Item<'_>) -> surface::Item<'arena, ()> {
+        match item {
+            Item::Def(def) => surface::Item::Def(self.def(def)),
+        }
+    }
+
+    fn def(&mut self, def: &Def<'_>) -> surface::Def<'arena, ()> {
+        let Def { name, r#type, expr } = def;
+        let r#type = self.expr(r#type);
+        let expr = self.expr(expr);
+        surface::Def {
+            extra: (),
+            name: *name,
+            r#type: Some(r#type),
+            expr,
+        }
+    }
+
     pub fn ann_expr(&mut self, expr: &Expr<'_>, r#type: &Expr<'_>) -> surface::Expr<'arena, ()> {
         let expr = self.expr_prec(Prec::Let, expr);
         let r#type = self.expr_prec(Prec::Let, r#type);
