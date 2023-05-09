@@ -1,0 +1,4 @@
+//~ run = "${PION} elab ${FILE}"
+
+let (x, y, x) = (true, false, true);
+{}

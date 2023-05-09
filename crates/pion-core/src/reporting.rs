@@ -11,6 +11,11 @@ pub enum Message {
         range: ByteRange,
         name: Symbol,
     },
+    DuplicateLocalName {
+        name: Symbol,
+        first_range: ByteRange,
+        duplicate_range: ByteRange,
+    },
     FunAppPlicity {
         fun_range: ByteRange,
         fun_type: String,
@@ -76,6 +81,16 @@ impl Message {
             Self::UnboundName { range, name } => Diagnostic::error()
                 .with_message(format!("cannot find `{name}` in scope"))
                 .with_labels(vec![primary_label(range)]),
+            Self::DuplicateLocalName {
+                name,
+                first_range,
+                duplicate_range,
+            } => Diagnostic::error()
+                .with_message(format!("duplicate definition of local name `{name}`"))
+                .with_labels(vec![
+                    secondary_label(first_range).with_message("first definition"),
+                    primary_label(duplicate_range).with_message("duplicate definition"),
+                ]),
             Self::FunAppPlicity {
                 fun_range,
                 fun_type,

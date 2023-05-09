@@ -171,20 +171,52 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         }
     }
 
+    fn check_duplicate_local(
+        &mut self,
+        names: &mut Vec<(ByteRange, Symbol)>,
+        name: Symbol,
+        range: ByteRange,
+    ) -> Result<(), ()> {
+        match names.iter().find(|(_, n)| *n == name) {
+            None => {
+                names.push((range, name));
+                Ok(())
+            }
+            Some((first_range, name)) => {
+                self.emit_message(Message::DuplicateLocalName {
+                    name: *name,
+                    first_range: *first_range,
+                    duplicate_range: range,
+                });
+                Err(())
+            }
+        }
+    }
+
+    // TODO: check for duplicate definitions in fun literal/fun type telescopes
     pub fn push_param_pat(
         &mut self,
         pat: &Pat<'arena>,
         scrut: &Scrut<'arena>,
     ) -> Vec<(Option<Symbol>, Scrut<'arena>)> {
         let mut defs = Vec::new();
+        let mut names = Vec::new();
         match pat {
-            Pat::Error(..) | Pat::Ignore(..) | Pat::Ident(..) | Pat::Lit(..) => {
+            Pat::Ident(range, name) => {
+                if self
+                    .check_duplicate_local(&mut names, *name, *range)
+                    .is_ok()
+                {
+                    self.local_env.push_param(Some(*name), scrut.r#type.clone());
+                }
+            }
+            Pat::Error(..) | Pat::Ignore(..) | Pat::Lit(..) => {
                 self.local_env.push_param(pat.name(), scrut.r#type.clone());
             }
             Pat::RecordLit(_, labels, pats) => {
                 let value = self.local_env.next_var();
                 self.local_env.push_param(None, scrut.r#type.clone());
-                self.push_record_pat(labels, pats, scrut, &value, &mut defs);
+                self.push_record_pat(labels, pats, scrut, &value, &mut defs, &mut names);
             }
         }
         defs
@@ -197,14 +229,25 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         value: &Value<'arena>,
     ) -> Vec<(Option<Symbol>, Scrut<'arena>)> {
         let mut defs = Vec::new();
+        let mut names = Vec::new();
         match pat {
-            Pat::Error(..) | Pat::Ignore(..) | Pat::Ident(..) | Pat::Lit(..) => {
+            Pat::Ident(range, name) => {
+                if self
+                    .check_duplicate_local(&mut names, *name, *range)
+                    .is_ok()
+                {
+                    let r#type = scrut.r#type.clone();
+                    defs.push((Some(*name), scrut.clone()));
+                    self.local_env.push_def(Some(*name), r#type, value.clone());
+                }
+            }
+            Pat::Error(..) | Pat::Ignore(..) | Pat::Lit(..) => {
                 let r#type = scrut.r#type.clone();
                 defs.push((pat.name(), scrut.clone()));
                 self.local_env.push_def(pat.name(), r#type, value.clone());
             }
             Pat::RecordLit(_, labels, pats) => {
-                self.push_record_pat(labels, pats, scrut, value, &mut defs);
+                self.push_record_pat(labels, pats, scrut, value, &mut defs, &mut names);
             }
         }
         defs
@@ -217,19 +260,25 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         value: &Value<'arena>,
     ) -> Vec<(Option<Symbol>, Scrut<'arena>)> {
         let mut defs = Vec::new();
+        let mut names = Vec::new();
         match pat {
             Pat::Error(..) | Pat::Ignore(..) => {
                 self.local_env
                     .push_def(None, scrut.r#type.clone(), value.clone());
             }
-            Pat::Ident(_, name) => {
-                let r#type = scrut.r#type.clone();
-                defs.push((Some(*name), scrut.clone()));
-                self.local_env.push_def(Some(*name), r#type, value.clone());
+            Pat::Ident(range, name) => {
+                if self
+                    .check_duplicate_local(&mut names, *name, *range)
+                    .is_ok()
+                {
+                    let r#type = scrut.r#type.clone();
+                    defs.push((Some(*name), scrut.clone()));
+                    self.local_env.push_def(Some(*name), r#type, value.clone());
+                }
             }
             Pat::Lit(..) => {}
             Pat::RecordLit(_, labels, pats) => {
-                self.push_record_pat(labels, pats, scrut, value, &mut defs);
+                self.push_record_pat(labels, pats, scrut, value, &mut defs, &mut names);
             }
         }
         defs
@@ -242,10 +291,11 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         scrut: &Scrut<'arena>,
         value: &Value<'arena>,
         defs: &mut Vec<(Option<Symbol>, Scrut<'arena>)>,
+        names: &mut Vec<(ByteRange, Symbol)>,
     ) {
         let mut iter = Iterator::zip(labels.iter(), pats.iter());
         let Type::RecordType(_, mut telescope) = self.elim_env().update_metas(&scrut.r#type) else {
-            unreachable!("expected record type, got")
+            unreachable!("expected record type")
         };
 
         while let Some(((label, pat), (r#type, cont))) =
@@ -258,13 +308,15 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
 
             match pat {
                 Pat::Error(..) | Pat::Ignore(..) | Pat::Lit(..) => {}
-                Pat::Ident(_, name) => {
-                    let r#type = scrut.r#type.clone();
-                    defs.push((Some(*name), scrut));
-                    self.local_env.push_def(Some(*name), r#type, value);
+                Pat::Ident(range, name) => {
+                    if self.check_duplicate_local(names, *name, *range).is_ok() {
+                        let r#type = scrut.r#type.clone();
+                        defs.push((Some(*name), scrut));
+                        self.local_env.push_def(Some(*name), r#type, value);
+                    }
                 }
                 Pat::RecordLit(_, labels, pats) => {
-                    self.push_record_pat(labels, pats, &scrut, &value, defs);
+                    self.push_record_pat(labels, pats, &scrut, &value, defs, names);
                 }
             }
         }
