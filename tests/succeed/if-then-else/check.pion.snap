@@ -1,5 +1,8 @@
 exit status: 0
 stdout:
-match true {false => 0, true => 1} : Int
+match true {
+    false => 0,
+    true => 1,
+} : Int
 
 stderr:

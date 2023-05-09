@@ -91,17 +91,24 @@ impl<'arena> PrettyCtx<'arena> {
             Expr::RecordProj(_, head, labels) => self.expr(head).append(self.concat(
                 (labels.iter()).map(|(_, label)| self.text(".").append(self.ident(*label))),
             )),
-            Expr::Match(_, scrut, cases) => self.sequence(
-                false,
-                self.text("match ").append(self.expr(scrut)).append(" {"),
-                cases.iter().map(|case| {
-                    self.pat(&case.pat)
+            Expr::Match(_, scrut, cases) => {
+                let cases = cases.iter().map(|case| {
+                    let pat = self.pat(&case.pat);
+                    let expr = self.expr(&case.expr);
+                    self.hardline()
+                        .append(pat)
                         .append(" => ")
-                        .append(self.expr(&case.expr))
-                }),
-                self.text(","),
-                self.text("}"),
-            ),
+                        .append(expr)
+                        .append(",")
+                });
+                self.text("match ")
+                    .append(self.expr(scrut))
+                    .append(" {")
+                    .append(self.concat(cases).nest(INDENT))
+                    .append(self.line_())
+                    .append("}")
+                    .group()
+            }
             Expr::If(_, (cond, then, r#else)) => {
                 let mut r#else = r#else;
                 let mut branches = Vec::new();

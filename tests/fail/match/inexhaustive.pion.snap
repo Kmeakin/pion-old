@@ -1,6 +1,9 @@
 exit status: 0
 stdout:
-fun (x : Bool) => match x {false => 1, _ => #error} : Bool -> Int
+fun (x : Bool) => match x {
+    false => 1,
+    _ => #error,
+} : Bool -> Int
 
 stderr:
 error: inexhaustive match expression

@@ -1,5 +1,8 @@
 exit status: 0
 stdout:
-fun (x : Int) => match x {0 => true, _ => false} : Int -> Bool
+fun (x : Int) => match x {
+    0 => true,
+    _ => false,
+} : Int -> Bool
 
 stderr:
