@@ -1,5 +1,3 @@
-use ustr::{Ustr, UstrMap};
-
 use crate::syntax::Type;
 
 macro_rules! define_prims {
@@ -44,31 +42,14 @@ define_prims! {
     Int => "Int",
 }
 
-pub struct PrimEnv<'arena> {
-    name_to_prim: UstrMap<(Prim, Type<'arena>)>,
-}
-
-impl<'arena> PrimEnv<'arena> {
-    fn define_prim(&mut self, prim: Prim, r#type: Type<'arena>) {
-        self.name_to_prim
-            .insert(Ustr::from(prim.name()), (prim, r#type));
-    }
-
-    pub fn new() -> Self {
-        let mut this = Self {
-            name_to_prim: UstrMap::default(),
-        };
-        this.name_to_prim.reserve(Prim::ALL.len());
-
-        this.define_prim(Prim::Type, Type::TYPE);
-        this.define_prim(Prim::Bool, Type::TYPE);
-        this.define_prim(Prim::Int, Type::TYPE);
-
-        this
-    }
-
-    pub fn lookup(&self, name: Ustr) -> Option<(Prim, Type<'arena>)> {
-        self.name_to_prim.get(&name).cloned()
+impl Prim {
+    pub fn r#type(self) -> Type<'static> {
+        #[allow(clippy::match_same_arms)]
+        match self {
+            Self::Type => Type::TYPE,
+            Self::Bool => Type::TYPE,
+            Self::Int => Type::TYPE,
+        }
     }
 }
 

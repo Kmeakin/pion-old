@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use pion_common::slice_vec::SliceVec;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::Plicity;
@@ -5,6 +7,7 @@ use pion_surface::syntax::Plicity;
 use super::r#match::PatRow;
 use super::*;
 use crate::elab::r#match::{Body, PatMatrix, Scrut};
+use crate::prim::Prim;
 
 impl<'arena, 'message> ElabCtx<'arena, 'message> {
     /// Synthesize the type of the given surface expr.
@@ -48,8 +51,8 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                     return (Expr::Local(index), r#type.clone());
                 }
 
-                if let Some((prim, r#type)) = self.prim_env.lookup(*name) {
-                    return (Expr::Prim(prim), r#type.clone());
+                if let Ok(prim) = Prim::from_str(name) {
+                    return (Expr::Prim(prim), prim.r#type());
                 }
 
                 self.emit_message(Message::UnboundName {

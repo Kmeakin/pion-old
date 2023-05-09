@@ -5,7 +5,6 @@ use scoped_arena::Scope;
 use self::unify::{PartialRenaming, UnifyCtx};
 use crate::distill::DistillCtx;
 use crate::env::{EnvLen, Index, Level, SharedEnv, UniqueEnv};
-use crate::prim::PrimEnv;
 use crate::reporting::Message;
 use crate::semantics::{ElimEnv, EvalEnv, QuoteEnv};
 use crate::syntax::*;
@@ -19,7 +18,6 @@ pub mod unify;
 pub struct ElabCtx<'arena, 'message> {
     scope: &'arena Scope<'arena>,
     temp_scope: Scope<'arena>,
-    prim_env: PrimEnv<'arena>,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
@@ -31,7 +29,6 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         Self {
             scope,
             temp_scope: Scope::new(),
-            prim_env: PrimEnv::new(),
             local_env: LocalEnv::default(),
             meta_env: MetaEnv::default(),
             renaming: PartialRenaming::default(),
