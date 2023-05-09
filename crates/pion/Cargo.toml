@@ -22,7 +22,5 @@ harness = false
 expect-test = "1.4.0"
 libtest-mimic = "0.6.0"
 serde = { version = "1.0.152", features = ["derive"] }
-shlex = "1.1.0"
-subst = "0.2.2"
-toml = "0.7.2"
+basic-toml =  "0.1.2"
 walkdir = "2.3.2"

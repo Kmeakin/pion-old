@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
@@ -44,7 +43,7 @@ fn main() {
                 .collect();
 
             // Parse those lines as TOML
-            let config = match toml::from_str::<Config>(&config_source) {
+            let config = match basic_toml::from_str::<Config>(&config_source) {
                 Ok(config) => config,
                 Err(error) => {
                     return libtest_mimic::Trial::test(test_name, move || {
@@ -58,20 +57,16 @@ fn main() {
             }
 
             libtest_mimic::Trial::test(test_name.clone(), move || {
-                let mut vars = HashMap::new();
-                vars.insert("PION", env!("CARGO_BIN_EXE_pion").to_owned());
-                vars.insert("FILE", test_name.clone());
-                let command = config.run;
-                let command = subst::substitute(&command, &vars).unwrap();
-                let words = shlex::split(&command).unwrap();
-                let (prog, args) = words.split_first().unwrap();
-                let mut command = std::process::Command::new(prog);
-                let command = command.args(args);
+                let mut command = std::process::Command::new("sh");
+                command.env_clear();
+                command.env("PION", env!("CARGO_BIN_EXE_pion"));
+                command.env("FILE", test_name);
+                command.args(["-c", "-u", &config.run]);
 
                 let output = match command.output() {
                     Err(err) => {
                         return Err(libtest_mimic::Failed::from(format!(
-                            "Could not run command: {:?}\n{:?}",
+                            "Could not run command: `{:?}`\n{:?}",
                             command, err
                         )))
                     }
