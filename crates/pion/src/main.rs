@@ -1,7 +1,5 @@
 #![warn(clippy::all, clippy::nursery, unused_qualifications)]
 
-use std::path::{Path, PathBuf};
-
 use bumpalo::Bump;
 use clap::Parser;
 use driver::Driver;
@@ -13,16 +11,16 @@ mod driver;
 #[derive(Parser)]
 #[clap(author, version, about)]
 enum Opts {
-    Parse { file: PathBuf },
-    Elab { file: PathBuf },
-    ElabModule { file: PathBuf },
-    Eval { file: PathBuf },
+    Parse { file: String },
+    Elab { file: String },
+    ElabModule { file: String },
+    Eval { file: String },
 }
 
-fn read_file(file: &Path) -> Result<InputString, String> {
-    let input = match std::fs::read_to_string(file) {
+fn read_file(path: &str) -> Result<InputString, String> {
+    let input = match std::fs::read_to_string(path) {
         Ok(input) => input,
-        Err(err) => return Err(format!("Cannot read `{}`: {err}", file.display())),
+        Err(err) => return Err(format!("Cannot read `{path}`: {err}")),
     };
 
     match pion_source::input::InputString::new(input) {
@@ -47,13 +45,13 @@ fn main() {
     match Opts::parse() {
         Opts::Parse { file } => {
             let contents = unwrap_or_exit(read_file(&file));
-            let file_id = driver.add_file(&file, contents);
+            let file_id = driver.add_file(file, contents);
             let expr = driver.parse_expr(&arena, file_id);
             driver.emit_expr(&arena, &expr)
         }
         Opts::Elab { file } => {
             let contents = unwrap_or_exit(read_file(&file));
-            let file_id = driver.add_file(&file, contents);
+            let file_id = driver.add_file(file, contents);
             let expr = driver.parse_expr(&arena, file_id);
 
             let on_message = |message: pion_core::reporting::Message| {
@@ -69,7 +67,7 @@ fn main() {
         }
         Opts::ElabModule { file } => {
             let contents = unwrap_or_exit(read_file(&file));
-            let file_id = driver.add_file(&file, contents);
+            let file_id = driver.add_file(file, contents);
             let module = driver.parse_module(&arena, file_id);
 
             let on_message = |message: pion_core::reporting::Message| {
@@ -88,7 +86,7 @@ fn main() {
         }
         Opts::Eval { file } => {
             let contents = unwrap_or_exit(read_file(&file));
-            let file_id = driver.add_file(&file, contents);
+            let file_id = driver.add_file(file, contents);
             let expr = driver.parse_expr(&arena, file_id);
 
             let on_message = |message: pion_core::reporting::Message| {
