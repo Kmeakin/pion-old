@@ -87,6 +87,12 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
         }
     }
 
+    pub fn ann_expr(&mut self, expr: &Expr<'_>, r#type: &Expr<'_>) -> surface::Expr<'arena, ()> {
+        let expr = self.expr_prec(Prec::Let, expr);
+        let r#type = self.expr_prec(Prec::Let, r#type);
+        self.builder().ann((), expr, r#type)
+    }
+
     pub fn expr(&mut self, expr: &Expr<'_>) -> surface::Expr<'arena, ()> {
         self.expr_prec(Prec::Top, expr)
     }

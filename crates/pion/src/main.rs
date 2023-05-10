@@ -62,13 +62,8 @@ fn main() {
             let (expr, r#type) = elab_ctx.elab_expr(expr);
 
             let mut distill_ctx = elab_ctx.distill_ctx();
-            let expr = distill_ctx.expr(&expr);
-            let r#type = distill_ctx.expr(&r#type);
-
-            driver.emit_expr(
-                &scope,
-                &pion_surface::syntax::Expr::Ann((), scope.to_scope((expr, r#type))),
-            );
+            let expr = distill_ctx.ann_expr(&expr, &r#type);
+            driver.emit_expr(&scope, &expr);
         }
         Opts::Eval { file } => {
             let contents = unwrap_or_exit(read_file(&file));
