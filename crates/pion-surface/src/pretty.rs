@@ -1,10 +1,10 @@
+use bumpalo::Bump;
 use pretty::{Doc, DocAllocator, DocPtr, RefDoc};
-use scoped_arena::Scope;
 
 use crate::syntax::*;
 
 pub struct PrettyCtx<'arena> {
-    scope: &'arena Scope<'arena>,
+    arena: &'arena Bump,
 }
 
 const INDENT: isize = 4;
@@ -12,7 +12,7 @@ const INDENT: isize = 4;
 type DocBuilder<'arena> = pretty::DocBuilder<'arena, PrettyCtx<'arena>>;
 
 impl<'arena> PrettyCtx<'arena> {
-    pub fn new(scope: &'arena Scope<'arena>) -> Self { Self { scope } }
+    pub fn new(arena: &'arena Bump) -> Self { Self { arena } }
 
     pub fn module<Extra>(&'arena self, module: &Module<'_, Extra>) -> DocBuilder<'arena> {
         let items = module.items.iter().map(|item| self.item(item));
@@ -292,20 +292,20 @@ impl<'arena, A: 'arena> DocAllocator<'arena, A> for PrettyCtx<'arena> {
     type Doc = RefDoc<'arena, A>;
 
     fn alloc(&'arena self, doc: Doc<'arena, Self::Doc, A>) -> Self::Doc {
-        RefDoc(self.scope.to_scope(doc))
+        RefDoc(self.arena.alloc(doc))
     }
 
     fn alloc_column_fn(
         &'arena self,
         f: impl Fn(usize) -> Self::Doc + 'arena,
     ) -> <Self::Doc as DocPtr<'arena, A>>::ColumnFn {
-        self.scope.to_scope(f)
+        self.arena.alloc(f)
     }
 
     fn alloc_width_fn(
         &'arena self,
         f: impl Fn(isize) -> Self::Doc + 'arena,
     ) -> <Self::Doc as DocPtr<'arena, A>>::WidthFn {
-        self.scope.to_scope(f)
+        self.arena.alloc(f)
     }
 }

@@ -171,8 +171,8 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             }
             surface::Expr::RecordType(_, fields) => {
                 let mut label_ranges = Vec::with_capacity(fields.len());
-                let mut labels = SliceVec::new(self.scope, fields.len());
-                let mut types = SliceVec::new(self.scope, fields.len());
+                let mut labels = SliceVec::new(self.arena, fields.len());
+                let mut types = SliceVec::new(self.arena, fields.len());
 
                 self.with_scope(|this| {
                     for field in fields.iter() {
@@ -200,9 +200,9 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             }
             surface::Expr::RecordLit(_, fields) => {
                 let mut label_ranges = Vec::with_capacity(fields.len());
-                let mut labels = SliceVec::new(self.scope, fields.len());
-                let mut exprs = SliceVec::new(self.scope, fields.len());
-                let mut types = SliceVec::new(self.scope, fields.len());
+                let mut labels = SliceVec::new(self.arena, fields.len());
+                let mut exprs = SliceVec::new(self.arena, fields.len());
+                let mut types = SliceVec::new(self.arena, fields.len());
 
                 for field in fields.iter() {
                     let (expr, type_value) = self.synth(&field.expr);
@@ -232,9 +232,9 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 )
             }
             surface::Expr::TupleLit(_, elems) => {
-                let mut labels = SliceVec::new(self.scope, elems.len());
-                let mut exprs = SliceVec::new(self.scope, elems.len());
-                let mut types = SliceVec::new(self.scope, elems.len());
+                let mut labels = SliceVec::new(self.arena, elems.len());
+                let mut exprs = SliceVec::new(self.arena, elems.len());
+                let mut types = SliceVec::new(self.arena, elems.len());
 
                 for (idx, expr) in elems.iter().enumerate() {
                     let (expr, type_value) = self.synth(expr);
@@ -593,8 +593,8 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 self.convert(expr.range(), synth_expr, &synth_type, &expected)
             }
             (surface::Expr::TupleLit(_, elems), _) if expected.is_type() => {
-                let mut labels = SliceVec::new(self.scope, elems.len());
-                let mut types = SliceVec::new(self.scope, elems.len());
+                let mut labels = SliceVec::new(self.arena, elems.len());
+                let mut types = SliceVec::new(self.arena, elems.len());
 
                 self.with_scope(|this| {
                     for (idx, expr) in elems.iter().enumerate() {
@@ -617,7 +617,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             {
                 let mut telescope = telescope.clone();
                 let mut fields = fields.iter();
-                let mut exprs = SliceVec::new(self.scope, telescope.len());
+                let mut exprs = SliceVec::new(self.arena, telescope.len());
 
                 while let Some((field, (r#type, cont))) =
                     Option::zip(fields.next(), self.elim_env().split_telescope(telescope))

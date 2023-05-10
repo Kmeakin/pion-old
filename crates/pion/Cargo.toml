@@ -11,7 +11,10 @@ pion-core = { version = "0.1.0", path = "../pion-core" }
 pion-source = { version = "0.1.0", path = "../pion-source" }
 pion-surface = { version = "0.1.0", path = "../pion-surface" }
 pretty = "0.12.0"
-scoped-arena = "0.4.1"
+
+rayon = "1.7.0"
+bumpalo = "3.12.2"
+bumpalo-herd = "0.1.2"
 
 [[test]]
 name = "source_tests"

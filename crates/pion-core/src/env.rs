@@ -112,6 +112,8 @@ impl<T> UniqueEnv<T> {
 
     /// Reserve space for `additional` extra elements.
     pub fn reserve(&mut self, additional: usize) { self.entries.reserve(additional) }
+
+    pub fn as_slice(&self) -> &[T] { &self.entries }
 }
 
 impl<T> std::ops::Deref for UniqueEnv<T> {

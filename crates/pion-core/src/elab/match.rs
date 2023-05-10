@@ -202,7 +202,7 @@ impl<'arena> Pat<'arena> {
                     ctx.elim_env().split_telescope(telescope.clone()),
                 ) {
                     telescope = next_telescope(ctx.local_env.next_var());
-                    let scrut_expr = ctx.scope.to_scope(scrut.expr);
+                    let scrut_expr = ctx.arena.alloc(scrut.expr);
                     let scrut_expr = Expr::RecordProj(scrut_expr, *label);
                     let scrut = Scrut {
                         expr: scrut_expr,

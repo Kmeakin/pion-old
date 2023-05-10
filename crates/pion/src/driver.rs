@@ -1,10 +1,10 @@
 use std::path::Path;
 
+use bumpalo::Bump;
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term::termcolor::ColorChoice;
 use pion_source::input::InputString;
-use scoped_arena::Scope;
 
 pub struct Driver {
     files: SimpleFiles<String, InputString>,
@@ -21,22 +21,18 @@ impl Driver {
         }
     }
 
-    pub fn emit_expr<'scope, Extra>(
-        &self,
-        scope: &'scope Scope<'scope>,
-        expr: &pion_surface::syntax::Expr<'_, Extra>,
-    ) {
-        let pretty_ctx = pion_surface::pretty::PrettyCtx::new(scope);
+    pub fn emit_expr<Extra>(&self, alloc: &Bump, expr: &pion_surface::syntax::Expr<'_, Extra>) {
+        let pretty_ctx = pion_surface::pretty::PrettyCtx::new(alloc);
         let doc = pretty_ctx.expr(expr).into_doc();
         self.emit_doc(doc)
     }
 
-    pub fn emit_module<'scope, Extra>(
+    pub fn emit_module<Extra>(
         &self,
-        scope: &'scope Scope<'scope>,
+        alloc: &Bump,
         module: &pion_surface::syntax::Module<'_, Extra>,
     ) {
-        let pretty_ctx = pion_surface::pretty::PrettyCtx::new(scope);
+        let pretty_ctx = pion_surface::pretty::PrettyCtx::new(alloc);
         let doc = pretty_ctx.module(module).into_doc();
         self.emit_doc(doc)
     }
@@ -66,28 +62,28 @@ impl Driver {
             .add(path.to_string_lossy().into_owned(), contents)
     }
 
-    pub fn parse_expr<'scope>(
+    pub fn parse_expr<'arena>(
         &self,
-        scope: &'scope Scope<'scope>,
+        arena: &'arena Bump,
         file_id: usize,
-    ) -> pion_surface::syntax::Expr<'scope> {
+    ) -> pion_surface::syntax::Expr<'arena> {
         let mut errors = Vec::new();
         let input = self.files.get(file_id).unwrap();
-        let expr = pion_surface::syntax::Expr::parse(scope, &mut errors, input.source());
+        let expr = pion_surface::syntax::Expr::parse(arena, &mut errors, input.source());
         for error in errors {
             self.emit_diagnostic(error.to_diagnostic(file_id))
         }
         expr
     }
 
-    pub fn parse_module<'scope>(
+    pub fn parse_module<'arena>(
         &self,
-        scope: &'scope Scope<'scope>,
+        arena: &'arena Bump,
         file_id: usize,
-    ) -> pion_surface::syntax::Module<'scope> {
+    ) -> pion_surface::syntax::Module<'arena> {
         let mut errors = Vec::new();
         let input = self.files.get(file_id).unwrap();
-        let module = pion_surface::syntax::Module::parse(scope, &mut errors, input.source());
+        let module = pion_surface::syntax::Module::parse(arena, &mut errors, input.source());
         for error in errors {
             self.emit_diagnostic(error.to_diagnostic(file_id))
         }

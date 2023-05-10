@@ -1,4 +1,4 @@
-use scoped_arena::Scope;
+use bumpalo::Bump;
 
 use pion_source::location::{BytePos, ByteRange};
 use crate::tokens::Token;
@@ -7,7 +7,7 @@ use crate::reporting::{TokenError, SyntaxError};
 
 grammar<'arena, 'source>(
     builder: Builder<'arena>,
-    scope: &'arena Scope<'arena>,
+    arena: &'arena Bump,
     errors: &mut Vec<SyntaxError>,
 );
 
@@ -49,7 +49,7 @@ extern {
 }
 
 pub Module: Module<'arena> = {
-    <items: Item*> => Module { items: scope.to_scope_from_iter(items) }
+    <items: Item*> => Module { items: arena.alloc_slice_fill_iter(items) }
 }
 
 Item: Item<'arena> = {
@@ -77,18 +77,18 @@ LetDef: LetDef<'arena> = {
 
 FunExpr: Expr<'arena> = {
     <start: @L> <plicity: Plicity> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => builder.arrow((start, end), plicity, arg, body),
-    <start: @L> "fun" <params: Param+> "->" <body: FunExpr> <end: @R> => builder.fun_type((start, end), scope.to_scope_from_iter(params), body),
-    <start: @L> "fun" <params: Param+> "=>" <body: LetExpr> <end: @R> => builder.fun_lit((start, end), scope.to_scope_from_iter(params), body),
+    <start: @L> "fun" <params: Param+> "->" <body: FunExpr> <end: @R> => builder.fun_type((start, end), arena.alloc_slice_fill_iter(params), body),
+    <start: @L> "fun" <params: Param+> "=>" <body: LetExpr> <end: @R> => builder.fun_lit((start, end), arena.alloc_slice_fill_iter(params), body),
     AppExpr => <>,
 }
 
 AppExpr: Expr<'arena> = {
-    <start: @L> <fun: ProjExpr> <args: Arg+> <end: @R> => builder.fun_app((start, end), fun, scope.to_scope_from_iter(args)),
+    <start: @L> <fun: ProjExpr> <args: Arg+> <end: @R> => builder.fun_app((start, end), fun, arena.alloc_slice_fill_iter(args)),
     ProjExpr => <>,
 }
 
 ProjExpr: Expr<'arena> = {
-    <start: @L> <head: AtomExpr> <labels: ("." <RangeIdent>)+> <end: @R> => builder.record_proj((start, end), head, scope.to_scope_from_iter(labels)),
+    <start: @L> <head: AtomExpr> <labels: ("." <RangeIdent>)+> <end: @R> => builder.record_proj((start, end), head, arena.alloc_slice_fill_iter(labels)),
     AtomExpr => <>,
 }
 
@@ -102,7 +102,7 @@ AtomExpr: Expr<'arena> = {
     <start: @L> "{" "}" <end: @R> => Expr::TupleLit(ByteRange::new(start, end), &[]),
     <start: @L> "{" <fields: Seq1<TypeField, ",">> "}" <end: @R> => Expr::RecordType(ByteRange::new(start, end), fields),
     <start: @L> "{" <fields: Seq1<ExprField, ",">> "}" <end: @R> => Expr::RecordLit(ByteRange::new(start, end), fields),
-    <start: @L> "match" <scrut: ProjExpr> "{" <cases: Seq<MatchCase, ",">> "}" <end: @R> => Expr::Match(ByteRange::new(start, end), scope.to_scope(scrut), cases),
+    <start: @L> "match" <scrut: ProjExpr> "{" <cases: Seq<MatchCase, ",">> "}" <end: @R> => Expr::Match(ByteRange::new(start, end), arena.alloc(scrut), cases),
 }
 
 TypeField: TypeField<'arena> = {
@@ -137,7 +137,7 @@ Plicity: Plicity = {
 }
 
 pub Pat: Pat<'arena> = {
-    <start: @L> "(" <pat: Pat> ")" <end: @R> => Pat::Paren(ByteRange::new(start, end), scope.to_scope(pat)),
+    <start: @L> "(" <pat: Pat> ")" <end: @R> => Pat::Paren(ByteRange::new(start, end), arena.alloc(pat)),
     <start: @L> <lit: Lit> <end: @R> => Pat::Lit(ByteRange::new(start, end), lit),
     <start: @L> <ident: Ident> <end: @R> => Pat::Ident(ByteRange::new(start, end), ident),
     <start: @L> "_" <end: @R> => Pat::Underscore(ByteRange::new(start, end)),
@@ -177,7 +177,7 @@ Int: u32 = {
 
 Tuple<Elem>: &'arena [Elem] = {
     "(" ")" => &[],
-    "(" <elem: Elem> "," ")" => scope.to_scope_from_iter([elem]),
+    "(" <elem: Elem> "," ")" => arena.alloc_slice_fill_iter([elem]),
     "(" <elems: Seq2<Elem, ",">> ")" => elems,
 };
 
@@ -199,18 +199,24 @@ Hole: Symbol = {
 
 Seq<Elem, Sep>: &'arena [Elem] = {
     <elems: (<Elem> Sep)*> <last: Elem?> => {
-        scope.to_scope_from_iter(elems.into_iter().chain(last))
+        let count = elems.len() + usize::from(last.is_some());
+        let mut iter = elems.into_iter().chain(last);
+        arena.alloc_slice_fill_with(count, |_| iter.next().unwrap())
     }
 };
 
 Seq1<Elem, Sep>: &'arena [Elem] = {
     <first: Elem> <elems: (Sep <Elem>)*> Sep? => {
-        scope.to_scope_from_iter(std::iter::once(first).chain(elems))
+        let count = elems.len() + 1;
+        let mut iter = std::iter::once(first).chain(elems);
+        arena.alloc_slice_fill_with(count, |_| iter.next().unwrap())
     },
 };
 
 Seq2<Elem, Sep>: &'arena [Elem] = {
     <first: Elem> Sep <second: Elem> <elems: (Sep <Elem>)*> Sep? => {
-        scope.to_scope_from_iter(std::iter::once(first).chain(std::iter::once(second)).chain(elems))
+        let count = elems.len() + 2;
+        let mut iter = std::iter::once(first).chain(std::iter::once(second)).chain(elems);
+        arena.alloc_slice_fill_with(count, |_| iter.next().unwrap())
     },
 };

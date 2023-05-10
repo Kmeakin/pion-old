@@ -1,7 +1,8 @@
-use pion_common::slice_vec::SliceVec;
+use bumpalo::Bump;
+use bumpalo_herd::Herd;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::{self as surface, Symbol};
-use scoped_arena::Scope;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use self::unify::{PartialRenaming, UnifyCtx};
 use crate::distill::DistillCtx;
@@ -17,19 +18,19 @@ pub mod unify;
 
 /// Elaboration context.
 pub struct ElabCtx<'arena, 'message> {
-    scope: &'arena Scope<'arena>,
-    temp_scope: Scope<'arena>,
+    arena: &'arena Bump,
+    temp_bump: Bump,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
-    on_message: &'message mut dyn FnMut(Message),
+    on_message: &'message dyn Fn(Message),
 }
 
 impl<'arena, 'message> ElabCtx<'arena, 'message> {
-    pub fn new(scope: &'arena Scope<'arena>, on_message: &'message mut dyn FnMut(Message)) -> Self {
+    pub fn new(arena: &'arena Bump, on_message: &'message dyn Fn(Message)) -> Self {
         Self {
-            scope,
-            temp_scope: Scope::new(),
+            arena,
+            temp_bump: Bump::new(),
             local_env: LocalEnv::default(),
             meta_env: MetaEnv::default(),
             renaming: PartialRenaming::default(),
@@ -37,7 +38,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         }
     }
 
-    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.scope) }
+    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.arena) }
 
     pub fn elab_expr(&mut self, expr: surface::Expr<'_>) -> (Expr<'arena>, Expr<'arena>) {
         let (expr, r#type) = self.synth(&expr);
@@ -72,28 +73,28 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
 
     pub fn distill_ctx(&mut self) -> DistillCtx<'arena, '_> {
         DistillCtx::new(
-            self.scope,
+            self.arena,
             &mut self.local_env.names,
             &self.meta_env.sources,
         )
     }
 
     pub fn elim_env(&self) -> ElimEnv<'arena, '_> {
-        ElimEnv::new(self.scope, &self.meta_env.values)
+        ElimEnv::new(self.arena, &self.meta_env.values)
     }
 
     pub fn eval_env(&mut self) -> EvalEnv<'arena, '_> {
-        let elim_env = ElimEnv::new(self.scope, &self.meta_env.values);
+        let elim_env = ElimEnv::new(self.arena, &self.meta_env.values);
         elim_env.eval_env(&mut self.local_env.values)
     }
 
     pub fn quote_env(&self) -> QuoteEnv<'arena, '_> {
-        QuoteEnv::new(self.scope, self.elim_env(), self.local_env.values.len())
+        QuoteEnv::new(self.arena, self.elim_env(), self.local_env.values.len())
     }
 
     pub fn unifiy_ctx(&mut self) -> UnifyCtx<'arena, '_> {
         UnifyCtx::new(
-            self.scope,
+            self.arena,
             &mut self.renaming,
             self.local_env.len(),
             &mut self.meta_env.values,
@@ -106,7 +107,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         let level = self.meta_env.push(source, r#type);
         Expr::InsertedMeta(
             level,
-            (self.scope).to_scope_from_iter(self.local_env.infos.iter().copied()),
+            self.arena.alloc_slice_copy(self.local_env.infos.as_slice()),
         )
     }
 
@@ -116,22 +117,21 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
     }
 
     fn pretty_value(&mut self, value: &Value) -> String {
-        let mut proxy = self.temp_scope.proxy();
-        let temp_scope = proxy.scope();
-
-        let elim_env = ElimEnv::new(self.scope, &self.meta_env.values);
-        let mut quote_env = QuoteEnv::new(&temp_scope, elim_env, self.local_env.values.len());
+        let elim_env = ElimEnv::new(&self.temp_bump, &self.meta_env.values);
+        let mut quote_env = QuoteEnv::new(&self.temp_bump, elim_env, self.local_env.values.len());
         let mut distill_ctx = DistillCtx::new(
-            &temp_scope,
+            &self.temp_bump,
             &mut self.local_env.names,
             &self.meta_env.sources,
         );
+        let pretty_ctx = pion_surface::pretty::PrettyCtx::new(&self.temp_bump);
 
         let expr = quote_env.quote(value);
         let surface_expr = distill_ctx.expr(&expr);
-        let ctx = pion_surface::pretty::PrettyCtx::new(&temp_scope);
-        let doc = ctx.expr(&surface_expr);
-        doc.pretty(usize::MAX).to_string()
+        let doc = pretty_ctx.expr(&surface_expr);
+        let ret = doc.pretty(usize::MAX).to_string();
+        self.temp_bump.reset();
+        ret
     }
 
     /// Run `f`, potentially modifying the local environment, then restore the
@@ -299,55 +299,47 @@ pub enum MetaSource {
 
 pub fn elab_module<'arena>(
     module: &surface::Module,
-    scope: &'arena Scope<'arena>,
-    on_message: &'_ mut dyn FnMut(Message),
+    bump: &'arena Bump,
+    herd: &'arena Herd,
+    on_message: &'_ (dyn Fn(Message) + Sync + Send),
 ) -> Module<'arena> {
-    let mut items = SliceVec::new(scope, module.items.len());
+    let item_iter = module.items.par_iter().map_init(
+        move || herd.get(),
+        |arena, item| {
+            let arena = arena.as_bump();
+            let arena = unsafe { std::mem::transmute(arena) }; // TODO: is this really safe?
+            let mut elab_ctx = ElabCtx::new(arena, on_message);
 
-    for item in module.items {
-        let item = match item {
-            surface::Item::Def(def) => {
-                let surface::Def {
+            match item {
+                surface::Item::Def(surface::Def {
                     name, r#type, expr, ..
-                } = def;
-                let mut elab_ctx = ElabCtx::new(scope, on_message);
+                }) => {
+                    let (r#type, expr) = match r#type {
+                        None => {
+                            let (expr, r#type) = elab_ctx.synth(expr);
+                            let r#type = elab_ctx.quote_env().quote(&r#type);
+                            (r#type, expr)
+                        }
+                        Some(r#type) => {
+                            let r#type = elab_ctx.check(r#type, &Type::TYPE);
+                            let type_value = elab_ctx.eval_env().eval(&r#type);
+                            let expr = elab_ctx.check(expr, &type_value);
+                            (r#type, expr)
+                        }
+                    };
 
-                match r#type {
-                    None => {
-                        let (expr, r#type) = elab_ctx.synth(expr);
-                        let r#type = elab_ctx.quote_env().quote(&r#type);
-
-                        let expr = elab_ctx.eval_env().zonk(&expr);
-                        let r#type = elab_ctx.eval_env().zonk(&r#type);
-
-                        Item::Def(Def {
-                            name: *name,
-                            r#type,
-                            expr,
-                        })
-                    }
-                    Some(r#type) => {
-                        let r#type = elab_ctx.check(r#type, &Type::TYPE);
-                        let type_value = elab_ctx.eval_env().eval(&r#type);
-                        let expr = elab_ctx.check(expr, &type_value);
-
-                        let expr = elab_ctx.eval_env().zonk(&expr);
-                        let r#type = elab_ctx.eval_env().zonk(&r#type);
-
-                        Item::Def(Def {
-                            name: *name,
-                            r#type,
-                            expr,
-                        })
-                    }
+                    Item::Def(Def {
+                        name: *name,
+                        r#type,
+                        expr,
+                    })
                 }
             }
-        };
+        },
+    );
 
-        items.push(item);
-    }
+    let items: Vec<Item> = item_iter.collect();
+    let items = bump.alloc_slice_fill_iter(items);
 
-    Module {
-        items: items.into(),
-    }
+    Module { items }
 }
