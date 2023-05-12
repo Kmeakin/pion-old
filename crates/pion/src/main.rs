@@ -5,6 +5,7 @@ use clap::Parser;
 use driver::Driver;
 use pion_core::distill::DistillCtx;
 use pion_source::input::InputString;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 mod driver;
 
@@ -14,6 +15,7 @@ enum Opts {
     Parse { file: String },
     Elab { file: String },
     ElabModule { file: String },
+    ElabModules { files: Vec<String> },
     Eval { file: String },
 }
 
@@ -41,6 +43,7 @@ fn unwrap_or_exit<T, E: std::fmt::Display>(value: Result<T, E>) -> T {
 
 fn main() {
     let arena = Bump::new();
+    let herd = bumpalo_herd::Herd::new();
     let mut driver = Driver::new();
     match Opts::parse() {
         Opts::Parse { file } => {
@@ -83,6 +86,34 @@ fn main() {
             let mut distill_ctx = DistillCtx::new(&arena, &mut local_names, &meta_sources);
             let module = distill_ctx.module(&module);
             driver.emit_module(&arena, &module);
+        }
+        Opts::ElabModules { files } => {
+            let files: Vec<_> = files
+                .into_iter()
+                .map(|file| {
+                    let contents = unwrap_or_exit(read_file(&file));
+                    driver.add_file(file, contents)
+                })
+                .collect();
+            files.par_iter().for_each_init(
+                || herd.get(),
+                |arena, file_id| {
+                    let arena = arena.as_bump();
+                    let on_message = |message: pion_core::reporting::Message| {
+                        let diag = message.to_diagnostic(*file_id);
+                        driver.emit_diagnostic(diag);
+                    };
+
+                    let module = driver.parse_module(arena, *file_id);
+                    let module = pion_core::elab::elab_module(&module, arena, &herd, &on_message);
+
+                    let mut local_names = Default::default();
+                    let meta_sources = Default::default();
+                    let mut distill_ctx = DistillCtx::new(arena, &mut local_names, &meta_sources);
+                    let module = distill_ctx.module(&module);
+                    driver.emit_module(arena, &module);
+                },
+            );
         }
         Opts::Eval { file } => {
             let contents = unwrap_or_exit(read_file(&file));
