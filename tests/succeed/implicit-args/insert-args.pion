@@ -1,8 +1,10 @@
 //~ run = "${PION} elab ${FILE}"
 
+{
 let id = fun (@A : Type) (a : A) => a;
 let always = fun (@A : Type) (@B : Type) (a : A) (b : B) => a;
 
 let _ = id false;
-let _ = always (0 : Int) false;
+let _ = always 0 false;
 {}
+}

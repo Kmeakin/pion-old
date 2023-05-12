@@ -6,9 +6,9 @@ let y : Bool = (true, false, true)._1;
 
 stderr:
 error: duplicate definition of local name `x`
-  ┌─ tests/fail/match/duplicate-name.pion:3:12
+  ┌─ tests/fail/match/duplicate-name.pion:4:12
   │
-3 │ let (x, y, x) = (true, false, true);
+4 │ let (x, y, x) = (true, false, true);
   │      -     ^ duplicate definition
   │      │      
   │      first definition

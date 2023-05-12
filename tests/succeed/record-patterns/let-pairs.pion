@@ -1,5 +1,6 @@
 //~ run = "${PION} elab ${FILE}"
 
+{
 let () = ();
 let _ = ();
 
@@ -9,3 +10,4 @@ let (_, b) = (false, true);
 let (_, _) = (false, true);
 let _ = (false, true);
 {}
+}

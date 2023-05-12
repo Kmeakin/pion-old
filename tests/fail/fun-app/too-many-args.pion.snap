@@ -10,9 +10,9 @@ Type : Type
 
 stderr:
 error: tried to apply too many arguments to function
-  ┌─ tests/fail/fun-app/too-many-args.pion:4:9
+  ┌─ tests/fail/fun-app/too-many-args.pion:5:9
   │
-4 │ let _ = id false true;
+5 │ let _ = id false true;
   │         ^^       ---- extra argument
   │         │         
   │         expression of type `Bool -> Bool`
@@ -20,9 +20,9 @@ error: tried to apply too many arguments to function
   = help: function expects 1 argument, but recieved 2 arguments
 
 error: tried to apply too many arguments to function
-  ┌─ tests/fail/fun-app/too-many-args.pion:5:9
+  ┌─ tests/fail/fun-app/too-many-args.pion:6:9
   │
-5 │ let _ = id false true true;
+6 │ let _ = id false true true;
   │         ^^       --------- extra arguments
   │         │         
   │         expression of type `Bool -> Bool`
@@ -30,9 +30,9 @@ error: tried to apply too many arguments to function
   = help: function expects 1 argument, but recieved 3 arguments
 
 error: tried to apply too many arguments to function
-  ┌─ tests/fail/fun-app/too-many-args.pion:8:9
+  ┌─ tests/fail/fun-app/too-many-args.pion:9:9
   │
-8 │ let _ = always false 0 true;
+9 │ let _ = always false 0 true;
   │         ^^^^^^         ---- extra argument
   │         │               
   │         expression of type `Bool -> Int -> Int`
@@ -40,12 +40,12 @@ error: tried to apply too many arguments to function
   = help: function expects 2 arguments, but recieved 3 arguments
 
 error: tried to apply too many arguments to function
-  ┌─ tests/fail/fun-app/too-many-args.pion:9:9
-  │
-9 │ let _ = always false 0 true true;
-  │         ^^^^^^         --------- extra arguments
-  │         │               
-  │         expression of type `Bool -> Int -> Int`
-  │
-  = help: function expects 2 arguments, but recieved 4 arguments
+   ┌─ tests/fail/fun-app/too-many-args.pion:10:9
+   │
+10 │ let _ = always false 0 true true;
+   │         ^^^^^^         --------- extra arguments
+   │         │               
+   │         expression of type `Bool -> Int -> Int`
+   │
+   = help: function expects 2 arguments, but recieved 4 arguments
 

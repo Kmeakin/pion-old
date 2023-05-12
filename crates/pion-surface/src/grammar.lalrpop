@@ -53,14 +53,17 @@ pub Def: Def<'arena> = {
 }
 
 pub Expr: Expr<'arena> = {
-    <start: @L> <expr: LetExpr> ":" <r#type: LetExpr> <end: @R> => builder.ann((start, end), expr, r#type),
+    // <start: @L> <expr: AtomExpr> ":" <r#type: FunExpr> <end: @R> => builder.ann((start, end), expr, r#type),
     LetExpr => <>,
 }
 
 LetExpr: Expr<'arena> = {
-    <start: @L> "let" <def: LetDef> ";" <body: LetExpr> <end: @R> => builder.r#let((start, end), def, body),
-    <start: @L> "if" <cond: LetExpr> "then" <then: LetExpr> "else" <r#else: LetExpr> <end: @R> => builder.if_then_else((start, end), cond, then, r#else),
+    IfExpr => <>,
     FunExpr => <>,
+}
+
+IfExpr: Expr<'arena> = {
+    <start: @L> "if" <cond: LetExpr> "then" <then: Block> "else" <r#else: Block> <end: @R> => builder.if_then_else((start, end), cond, then, r#else),
 }
 
 LetDef: LetDef<'arena> = {
@@ -91,9 +94,26 @@ AtomExpr: Expr<'arena> = {
     <start: @L> "_" <end: @R> => Expr::Placeholder(ByteRange::new(start, end)),
     <start: @L> <hole: Hole> <end: @R> => Expr::Hole(ByteRange::new(start, end), hole),
     <start: @L> <ident: Ident> <end: @R> => Expr::Ident(ByteRange::new(start, end), ident),
-    <start: @L> "{" "}" <end: @R> => Expr::TupleLit(ByteRange::new(start, end), &[]),
     <start: @L> "{" <fields: Seq1<TypeField, ",">> "}" <end: @R> => Expr::RecordType(ByteRange::new(start, end), fields),
     <start: @L> "{" <fields: Seq1<ExprField, ",">> "}" <end: @R> => Expr::RecordLit(ByteRange::new(start, end), fields),
+    MatchExpr => <>,
+    BlockExpr => <>,
+}
+
+BlockExpr: Expr<'arena> = {
+    <start: @L> <block: Block> <end: @R> => Expr::Block(ByteRange::new(start, end), block),
+}
+
+Block: Block<'arena> = {
+    "{" <stmts: Stmt*> <expr: Expr?> "}" => Block {stmts: scope.to_scope_from_iter(stmts), expr: expr.map(|expr| scope.to_scope(expr) as &_)},
+}
+
+Stmt: Stmt<'arena> = {
+    "let" <def: LetDef> ";" => Stmt::Let(def),
+    <expr: Expr> ";" => Stmt::Expr(expr),
+}
+
+MatchExpr: Expr<'arena> = {
     <start: @L> "match" <scrut: ProjExpr> "{" <cases: Seq<MatchCase, ",">> "}" <end: @R> => Expr::Match(ByteRange::new(start, end), scope.to_scope(scrut), cases),
 }
 
@@ -181,6 +201,7 @@ Ident: Symbol = {
     <ident: "Ident"> => ident.into(),
 }
 
+#[inline]
 RangeIdent: (ByteRange, Symbol) = {
     <start: @L> <ident: "Ident"> <end: @R> => (ByteRange::new(start, end), ident.into()),
 }

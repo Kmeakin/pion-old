@@ -1,5 +1,6 @@
 //~ run = "${PION} elab ${FILE}"
 
+{
 let and1 : Bool -> Bool -> Bool
 = fun x y => match (x, y) {
     (true, true) => true,
@@ -57,3 +58,4 @@ let xor3 : Bool -> Bool -> Bool
 };
 
 {}
+}

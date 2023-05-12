@@ -5,7 +5,7 @@ use pion_source::location::ByteRange;
 use pion_surface::syntax::{Plicity, Symbol};
 use scoped_arena::Scope;
 
-use crate::env::{EnvLen, Index, Level, SharedEnv};
+use crate::env::{EnvLen, Index, Level, SharedEnv, UniqueEnv};
 use crate::prim::Prim;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -30,6 +30,8 @@ pub enum Expr<'arena> {
 }
 
 impl<'arena> Expr<'arena> {
+    pub const UNIT_LIT: Self = Self::RecordLit(&[], &[]);
+
     pub fn binds_local(&self, var: EnvLen) -> bool {
         self.subexprs(var)
             .any(|(env, expr)| matches!(expr, Expr::Local(var) if env == *var))
@@ -177,6 +179,8 @@ impl<'arena> Value<'arena> {
     }
 
     pub const fn is_error(&self) -> bool { matches!(self, Self::Stuck(Head::Error, _)) }
+
+    pub fn unit_type() -> Self { Self::RecordType(&[], Telescope::new(SharedEnv::default(), &[])) }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

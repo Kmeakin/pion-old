@@ -110,37 +110,43 @@ impl<'arena> PrettyCtx<'arena> {
                     .group()
             }
             Expr::If(_, (cond, then, r#else)) => {
-                let mut r#else = r#else;
-                let mut branches = Vec::new();
-                while let Expr::If(_, (cond, then, next_else)) = r#else {
-                    branches.push((cond, then));
-                    r#else = next_else;
-                }
-
+                let cond = self.expr(cond);
+                let then = self.block(then);
+                let r#else = self.block(r#else);
                 self.text("if ")
-                    .append(self.expr(cond))
-                    .append(
-                        self.line()
-                            .append(self.text("then "))
-                            .append(self.expr(then))
-                            .nest(INDENT),
-                    )
-                    .append(self.concat(branches.iter().map(|(cond_expr, then_expr)| {
-                        self.line()
-                            .append("else if ")
-                            .append(self.expr(cond_expr))
-                            .append(" then ")
-                            .append(self.expr(then_expr))
-                            .nest(INDENT)
-                    })))
-                    .append(
-                        self.line()
-                            .append(self.text("else "))
-                            .append(self.expr(r#else))
-                            .nest(INDENT),
-                    )
-                    .group()
+                    .append(cond)
+                    .append(" then ")
+                    .append(then)
+                    .append(" else ")
+                    .append(r#else)
             }
+            Expr::Block(_, block) => self.block(block),
+        }
+    }
+
+    fn block<Extra>(&'arena self, block: &Block<'_, Extra>) -> DocBuilder<'arena> {
+        let stmts = block.stmts.iter().map(|stmt| self.stmt(stmt));
+        let expr = block.expr.map_or(self.nil(), |expr| self.expr(expr));
+        self.text("{")
+            .append(self.concat(stmts).append(expr).nest(INDENT))
+            .append("}")
+            .group()
+    }
+
+    fn stmt<Extra>(&'arena self, stmt: &Stmt<'_, Extra>) -> DocBuilder<'arena> {
+        match stmt {
+            Stmt::Let(def) => self
+                .text("let ")
+                .append(self.pat(&def.pat))
+                .append(
+                    def.r#type
+                        .as_ref()
+                        .map(|r#type| self.text(" : ").append(self.expr(r#type))),
+                )
+                .append(self.expr(&def.expr))
+                .append(";"),
+            Stmt::Expr(expr) => self.expr(expr).append(";"),
+            Stmt::Semi => self.text(";"),
         }
     }
 

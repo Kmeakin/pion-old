@@ -1,3 +1,5 @@
 //~ run = "${PION} elab ${FILE}"
 
-(let x = false; x) : Bool
+{
+let _ : Bool = {let x = false; x};
+}

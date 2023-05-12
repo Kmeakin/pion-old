@@ -1,5 +1,7 @@
 //~ run = "${PION} elab ${FILE}"
 
+{
 let _ = false;
 let _ = true;
 Type
+}

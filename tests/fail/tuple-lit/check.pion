@@ -1,7 +1,9 @@
 //~ run = "${PION} elab ${FILE}"
 
-let _ = (false, false, false) : (Int, Int, Int, Int);
-let _ = (false, false, false) : (Int, Int, Int);
-let _ = (false, false, false) : (Int, Int);
+{
+let _ : (Int, Int, Int, Int) = (false, false, false);
+let _ : (Int, Int, Int) = (false, false, false);
+let _ : (Int, Int) = (false, false, false);
 
 {}
+}

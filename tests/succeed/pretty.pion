@@ -1,16 +1,18 @@
 //~ run = "${PION} elab ${FILE}"
 
-let foo = (
+{
+let foo = {
     let x = 0;
     let x = 0;
-    let x = (let y = 1; let y = 1; let y = 1; let y = 1; y);
+    let x = {let y = 1; let y = 1; let y = 1; let y = 1; y};
     let x = 0;
     let x = 0;
     x
-);
+};
 
 let _ = fun (x : Bool) (x : Bool) (x : Bool) (x : Bool) (x : Bool) (x : Bool) (x : Bool) (x : Bool) (x : Bool) (x : Bool) => x;
 
 let _ = {a = 0, b = 1, c = 2, d = 3, e = 4, f = 5, g = 6, h = 7, i = 8, j = 9, k = 10};
 
 {}
+}

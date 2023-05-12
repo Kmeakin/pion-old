@@ -312,12 +312,13 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             }
             surface::Expr::If(_, (cond, then, r#else)) => {
                 let cond = self.check(cond, &Type::BOOL);
-                let (then, r#type) = self.synth(then);
-                let r#else = self.check(r#else, &r#type);
+                let (then, r#type) = self.synth_block(then);
+                let r#else = self.check_block(r#else, &r#type);
 
                 let r#match = self.expr_builder().if_then_else(cond, then, r#else);
                 (r#match, r#type)
             }
+            surface::Expr::Block(.., block) => self.synth_block(block),
         }
     }
 
@@ -634,15 +635,133 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             }
             (surface::Expr::If(_, (cond, then, r#else)), _) => {
                 let cond = self.check(cond, &Type::BOOL);
-                let then = self.check(then, &expected);
-                let r#else = self.check(r#else, &expected);
+                let then = self.check_block(then, &expected);
+                let r#else = self.check_block(r#else, &expected);
 
                 self.expr_builder().if_then_else(cond, then, r#else)
             }
+            (surface::Expr::Block(_, block), _) => self.check_block(block, &expected),
             _ => {
                 let (synth_expr, synth_type) = self.synth(expr);
                 self.convert(expr.range(), synth_expr, &synth_type, &expected)
             }
+        }
+    }
+
+    fn synth_block(&mut self, block: &surface::Block<'_>) -> (Expr<'arena>, Type<'arena>) {
+        self.with_scope(|this| this.synth_block_contents(block.stmts, block.expr))
+    }
+
+    fn check_block(&mut self, block: &surface::Block<'_>, expected: &Type<'arena>) -> Expr<'arena> {
+        self.with_scope(|this| this.check_block_contents(block.stmts, block.expr, expected))
+    }
+
+    fn synth_block_contents(
+        &mut self,
+        stmts: &[surface::Stmt<'_>],
+        expr: Option<&surface::Expr<'_>>,
+    ) -> (Expr<'arena>, Type<'arena>) {
+        match stmts.split_first() {
+            None => match expr {
+                None => (Expr::UNIT_LIT, Type::unit_type()),
+                Some(expr) => self.synth(expr),
+            },
+            Some((stmt, stmts)) => match stmt {
+                surface::Stmt::Semi => self.synth_block_contents(stmts, expr),
+                surface::Stmt::Expr(stmt_expr) => {
+                    let (stmt_expr, stmt_type_value) = self.synth(stmt_expr);
+                    let stmt_value = self.eval_env().eval(&stmt_expr);
+                    let stmt_type = self.quote_env().quote(&stmt_type_value);
+                    let stmt_def = LetDef {
+                        name: None,
+                        r#type: stmt_type,
+                        expr: stmt_expr,
+                    };
+
+                    self.local_env.push_def(None, stmt_type_value, stmt_value);
+
+                    let (body_expr, body_type) = self.synth_block_contents(stmts, expr);
+                    let expr = self.expr_builder().r#let(stmt_def, body_expr);
+                    (expr, body_type)
+                }
+                surface::Stmt::Let(def) => {
+                    let range = def.pat.range();
+                    let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
+                    let def_expr = self.check(&def.expr, &type_value);
+                    let def_value = self.eval_env().eval(&def_expr);
+                    let scrut = Scrut::new(def_expr, type_value);
+
+                    let (defs, body_expr, body_type) = self.with_scope(|this| {
+                        let defs = this.push_def_pat(&pat, &scrut, &def_value);
+                        let (body_expr, body_type) = this.synth_block_contents(stmts, expr);
+                        (defs, body_expr, body_type)
+                    });
+
+                    let expr = self.elab_match(
+                        PatMatrix::singleton(scrut, pat),
+                        &[Body::new(body_expr, defs)],
+                        range,
+                        range,
+                    );
+
+                    (expr, body_type)
+                }
+            },
+        }
+    }
+
+    fn check_block_contents(
+        &mut self,
+        stmts: &[surface::Stmt<'_>],
+        expr: Option<&surface::Expr<'_>>,
+        expected: &Type<'arena>,
+    ) -> Expr<'arena> {
+        match stmts.split_first() {
+            None => match expr {
+                None => Expr::UNIT_LIT, // TODO: check against `expected`
+                Some(expr) => self.check(expr, expected),
+            },
+            Some((stmt, stmts)) => match stmt {
+                surface::Stmt::Semi => self.check_block_contents(stmts, expr, expected),
+                surface::Stmt::Expr(stmt_expr) => {
+                    let (stmt_expr, stmt_type_value) = self.synth(stmt_expr);
+                    let stmt_value = self.eval_env().eval(&stmt_expr);
+                    let stmt_type = self.quote_env().quote(&stmt_type_value);
+                    let stmt_def = LetDef {
+                        name: None,
+                        r#type: stmt_type,
+                        expr: stmt_expr,
+                    };
+
+                    self.local_env.push_def(None, stmt_type_value, stmt_value);
+
+                    let body_expr = self.check_block_contents(stmts, expr, expected);
+                    let expr = self.expr_builder().r#let(stmt_def, body_expr);
+                    expr
+                }
+                surface::Stmt::Let(def) => {
+                    let range = def.pat.range();
+                    let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
+                    let def_expr = self.check(&def.expr, &type_value);
+                    let def_value = self.eval_env().eval(&def_expr);
+                    let scrut = Scrut::new(def_expr, type_value);
+
+                    let (defs, body_expr) = self.with_scope(|this| {
+                        let defs = this.push_def_pat(&pat, &scrut, &def_value);
+                        let body_expr = this.check_block_contents(stmts, expr, expected);
+                        (defs, body_expr)
+                    });
+
+                    let expr = self.elab_match(
+                        PatMatrix::singleton(scrut, pat),
+                        &[Body::new(body_expr, defs)],
+                        range,
+                        range,
+                    );
+
+                    expr
+                }
+            },
         }
     }
 

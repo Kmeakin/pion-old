@@ -1,5 +1,6 @@
 //~ run = "${PION} elab ${FILE}"
 
+{
 let FstType = fun ((A, B) : (Type, Type)) ((a, b) : (A, B)) -> A;
 let SndType = fun ((A, B) : (Type, Type)) ((a, b) : (A, B)) -> B;
 
@@ -7,3 +8,4 @@ let fst : FstType = fun (A, B) (x, y) => x;
 let snd : SndType = fun (A, B) (x, y) => y;
 
 {}
+}

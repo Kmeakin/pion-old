@@ -7,20 +7,20 @@ let _ : (Int, Int) = #error;
 
 stderr:
 error: mismatched types
-  ┌─ tests/fail/tuple-lit/check.pion:3:9
+  ┌─ tests/fail/tuple-lit/check.pion:4:32
   │
-3 │ let _ = (false, false, false) : (Int, Int, Int, Int);
-  │         ^^^^^^^^^^^^^^^^^^^^^ type mismatch, expected `(Int, Int, Int, Int)`, found `(Bool, Bool, Bool)`
+4 │ let _ : (Int, Int, Int, Int) = (false, false, false);
+  │                                ^^^^^^^^^^^^^^^^^^^^^ type mismatch, expected `(Int, Int, Int, Int)`, found `(Bool, Bool, Bool)`
 
 error: mismatched types
-  ┌─ tests/fail/tuple-lit/check.pion:4:9
+  ┌─ tests/fail/tuple-lit/check.pion:5:27
   │
-4 │ let _ = (false, false, false) : (Int, Int, Int);
-  │         ^^^^^^^^^^^^^^^^^^^^^ type mismatch, expected `(Int, Int, Int)`, found `(Bool, Bool, Bool)`
+5 │ let _ : (Int, Int, Int) = (false, false, false);
+  │                           ^^^^^^^^^^^^^^^^^^^^^ type mismatch, expected `(Int, Int, Int)`, found `(Bool, Bool, Bool)`
 
 error: mismatched types
-  ┌─ tests/fail/tuple-lit/check.pion:5:9
+  ┌─ tests/fail/tuple-lit/check.pion:6:22
   │
-5 │ let _ = (false, false, false) : (Int, Int);
-  │         ^^^^^^^^^^^^^^^^^^^^^ type mismatch, expected `(Int, Int)`, found `(Bool, Bool, Bool)`
+6 │ let _ : (Int, Int) = (false, false, false);
+  │                      ^^^^^^^^^^^^^^^^^^^^^ type mismatch, expected `(Int, Int)`, found `(Bool, Bool, Bool)`
 

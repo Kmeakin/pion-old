@@ -46,7 +46,24 @@ pub enum Expr<'arena, Extra = ByteRange> {
     TupleLit(Extra, &'arena [Self]),
     RecordProj(Extra, &'arena Self, &'arena [(Extra, Symbol)]),
     Match(Extra, &'arena Self, &'arena [MatchCase<'arena, Extra>]),
-    If(Extra, &'arena (Self, Self, Self)),
+    If(
+        Extra,
+        &'arena (Self, Block<'arena, Extra>, Block<'arena, Extra>),
+    ),
+    Block(Extra, Block<'arena>),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Block<'arena, Extra = ByteRange> {
+    pub stmts: &'arena [Stmt<'arena, Extra>],
+    pub expr: Option<&'arena Expr<'arena, Extra>>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Stmt<'arena, Extra = ByteRange> {
+    Let(LetDef<'arena, Extra>),
+    Expr(Expr<'arena, Extra>),
+    Semi,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -103,7 +120,8 @@ impl<'arena, Extra> Expr<'arena, Extra> {
             | Expr::TupleLit(range, ..)
             | Expr::RecordProj(range, ..)
             | Expr::Match(range, ..)
-            | Expr::If(range, _) => range.clone(),
+            | Expr::If(range, _)
+            | Expr::Block(range, _) => range.clone(),
         }
     }
 }
@@ -395,8 +413,8 @@ impl<'arena> Builder<'arena> {
         &self,
         range: impl Into<Extra>,
         cond: Expr<'arena, Extra>,
-        then: Expr<'arena, Extra>,
-        r#else: Expr<'arena, Extra>,
+        then: Block<'arena, Extra>,
+        r#else: Block<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
         Expr::If(range.into(), self.scope.to_scope((cond, then, r#else)))
     }
