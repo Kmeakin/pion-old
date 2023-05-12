@@ -1,6 +1,11 @@
 exit status: 0
 stdout:
-let _ : Bool = let x : Bool = false; x;
-() : ()
+{
+    let _ : Bool = {
+        let x : Bool = false;
+        x
+    };
+    ()
+} : ()
 
 stderr:

@@ -142,20 +142,32 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
             }
             Expr::Lit(literal) => surface::Expr::Lit((), lit(*literal)),
             Expr::Prim(primitive) => prim(*primitive),
-            Expr::Let((def, body)) => {
-                let name = def.name;
-                let def = surface::LetDef {
-                    pat: name_to_pat(def.name),
-                    r#type: Some(self.expr_prec(Prec::Top, &def.r#type)),
-                    expr: self.expr_prec(Prec::Let, &def.expr),
+            Expr::Let(..) => {
+                let mut stmts = Vec::new();
+                let mut expr = expr;
+
+                let initial_len = self.local_len();
+                while let Expr::Let((def, next_expr)) = expr {
+                    let name = def.name;
+                    let def = surface::LetDef {
+                        pat: name_to_pat(def.name),
+                        r#type: Some(self.expr_prec(Prec::Top, &def.r#type)),
+                        expr: self.expr_prec(Prec::Let, &def.expr),
+                    };
+
+                    let name = self.freshen_name(name, expr);
+                    self.push_local(name);
+                    stmts.push(surface::Stmt::Let(def));
+                    expr = next_expr;
+                }
+                let expr = self.expr(expr);
+                self.truncate_local(initial_len);
+
+                let block = surface::Block {
+                    stmts: self.scope.to_scope_from_iter(stmts),
+                    expr: Some(self.scope.to_scope(expr)),
                 };
-
-                let name = self.freshen_name(name, body);
-                self.push_local(name);
-                let body = self.expr_prec(Prec::Let, body);
-                self.pop_local();
-
-                self.paren(prec > Prec::Let, builder.r#let((), def, body))
+                self.paren(prec > Prec::Atom, surface::Expr::Block((), block))
             }
             Expr::FunType(..) => {
                 let mut body = expr;

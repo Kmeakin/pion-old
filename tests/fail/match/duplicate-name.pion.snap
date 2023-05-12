@@ -1,8 +1,10 @@
 exit status: 0
 stdout:
-let x : Bool = (true, false, true)._0;
-let y : Bool = (true, false, true)._1;
-() : ()
+{
+    let x : Bool = (true, false, true)._0;
+    let y : Bool = (true, false, true)._1;
+    ()
+} : ()
 
 stderr:
 error: duplicate definition of local name `x`

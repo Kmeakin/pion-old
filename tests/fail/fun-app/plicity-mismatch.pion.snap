@@ -1,10 +1,12 @@
 exit status: 0
 stdout:
-let id1 : fun (A : Type) -> A -> A = fun (A : Type) (a : A) => a;
-let id2 : fun (@A : Type) -> A -> A = fun (@A : Type) (a : A) => a;
-let _ : Bool = #error;
-let _ : Bool = #error;
-() : ()
+{
+    let id1 : fun (A : Type) -> A -> A = fun (A : Type) (a : A) => a;
+    let id2 : fun (@A : Type) -> A -> A = fun (@A : Type) (a : A) => a;
+    let _ : Bool = #error;
+    let _ : Bool = #error;
+    ()
+} : ()
 
 stderr:
 error: tried to apply implicit argument where explicit argument was expected

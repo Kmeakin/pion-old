@@ -1,13 +1,15 @@
 exit status: 0
 stdout:
-let _ : () = ();
-let _ : (Int,) = (1,);
-let _ : (Int, Int) = (1, 2);
-let _ : (Int, Int, Int) = (1, 2, 3);
-let _ : Type = ();
-let _ : Type = (Int,);
-let _ : Type = (Int, Int);
-let _ : Type = (Int, Int, Int);
-() : ()
+{
+    let _ : () = ();
+    let _ : (Int,) = (1,);
+    let _ : (Int, Int) = (1, 2);
+    let _ : (Int, Int, Int) = (1, 2, 3);
+    let _ : Type = ();
+    let _ : Type = (Int,);
+    let _ : Type = (Int, Int);
+    let _ : Type = (Int, Int, Int);
+    ()
+} : ()
 
 stderr:

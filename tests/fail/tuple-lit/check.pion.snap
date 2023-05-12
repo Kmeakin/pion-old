@@ -1,9 +1,11 @@
 exit status: 0
 stdout:
-let _ : (Int, Int, Int, Int) = #error;
-let _ : (Int, Int, Int) = #error;
-let _ : (Int, Int) = #error;
-() : ()
+{
+    let _ : (Int, Int, Int, Int) = #error;
+    let _ : (Int, Int, Int) = #error;
+    let _ : (Int, Int) = #error;
+    ()
+} : ()
 
 stderr:
 error: mismatched types

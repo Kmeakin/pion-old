@@ -1,7 +1,9 @@
 exit status: 0
 stdout:
-let _ : Bool = false;
-let _ : Bool = true;
-Type : Type
+{
+    let _ : Bool = false;
+    let _ : Bool = true;
+    Type
+} : Type
 
 stderr:

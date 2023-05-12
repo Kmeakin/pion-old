@@ -125,12 +125,20 @@ impl<'arena> PrettyCtx<'arena> {
     }
 
     fn block<Extra>(&'arena self, block: &Block<'_, Extra>) -> DocBuilder<'arena> {
-        let stmts = block.stmts.iter().map(|stmt| self.stmt(stmt));
-        let expr = block.expr.map_or(self.nil(), |expr| self.expr(expr));
-        self.text("{")
-            .append(self.concat(stmts).append(expr).nest(INDENT))
-            .append("}")
-            .group()
+        let stmts = block
+            .stmts
+            .iter()
+            .map(|stmt| self.stmt(stmt))
+            .chain(block.expr.map(|expr| self.expr(expr)));
+        let docs = self.intersperse(stmts, self.hardline());
+
+        self.concat([
+            self.text("{"),
+            self.concat([self.line(), docs]).nest(INDENT),
+            self.line(),
+            self.text("}"),
+        ])
+        .group()
     }
 
     fn stmt<Extra>(&'arena self, stmt: &Stmt<'_, Extra>) -> DocBuilder<'arena> {
@@ -143,8 +151,10 @@ impl<'arena> PrettyCtx<'arena> {
                         .as_ref()
                         .map(|r#type| self.text(" : ").append(self.expr(r#type))),
                 )
+                .append(" = ")
                 .append(self.expr(&def.expr))
-                .append(";"),
+                .append(";")
+                .group(),
             Stmt::Expr(expr) => self.expr(expr).append(";"),
             Stmt::Semi => self.text(";"),
         }
@@ -158,13 +168,13 @@ impl<'arena> PrettyCtx<'arena> {
         &'arena self,
         space: bool,
         start_delim: DocBuilder<'arena>,
-        docs: impl ExactSizeIterator<Item = DocBuilder<'arena>>,
+        docs: impl Iterator<Item = DocBuilder<'arena>>,
         separator: DocBuilder<'arena>,
         end_delim: DocBuilder<'arena>,
     ) -> DocBuilder<'arena> {
-        if docs.len() == 0 {
-            return self.concat([start_delim, end_delim]);
-        }
+        // if docs.len() == 0 {
+        //     return self.concat([start_delim, end_delim]);
+        // }
 
         let docs = self.intersperse(docs, self.concat([separator.clone(), self.line()]));
         self.concat([

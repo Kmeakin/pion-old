@@ -1,46 +1,72 @@
 exit status: 0
 stdout:
-let f1 : Int -> Int -> Int =
-    fun (x : Int) (y : Int) => match (x, y)._0 {
-        0 => let a : Int = (x, y)._1;
-        a,
+{
+    let f1 : Int -> Int -> Int = fun (x : Int) (y : Int) => match (x, y)._0 {
+        0 => {
+            let a : Int = (x, y)._1;
+            a
+        },
         1 => match (x, y)._1 {
-            0 => let b : Int = (x, y)._0;
-            b,
-            1 => let c : Int = (x, y)._1;
-            c,
-            _ => let c : Int = (x, y)._1;
-            c,
+            0 => {
+                let b : Int = (x, y)._0;
+                b
+            },
+            1 => {
+                let c : Int = (x, y)._1;
+                c
+            },
+            _ => {
+                let c : Int = (x, y)._1;
+                c
+            },
         },
         _ => match (x, y)._1 {
-            0 => let b : Int = (x, y)._0;
-            b,
-            1 => let d : Int = (x, y)._0;
-            d,
+            0 => {
+                let b : Int = (x, y)._0;
+                b
+            },
+            1 => {
+                let d : Int = (x, y)._0;
+                d
+            },
             _ => 5,
         },
     };
-let f2 : Int -> Int -> Int =
-    fun (x : Int) (y : Int) => let p : (Int, Int) = (x, y);
-    match p._0 {
-        0 => let a : Int = p._1;
-        a,
-        1 => match p._1 {
-            0 => let b : Int = p._0;
-            b,
-            1 => let c : Int = p._1;
-            c,
-            _ => let c : Int = p._1;
-            c,
-        },
-        _ => match p._1 {
-            0 => let b : Int = p._0;
-            b,
-            1 => let d : Int = p._0;
-            d,
-            _ => 5,
-        },
+    let f2 : Int -> Int -> Int = fun (x : Int) (y : Int) => {
+        let p : (Int, Int) = (x, y);
+        match p._0 {
+            0 => {
+                let a : Int = p._1;
+                a
+            },
+            1 => match p._1 {
+                0 => {
+                    let b : Int = p._0;
+                    b
+                },
+                1 => {
+                    let c : Int = p._1;
+                    c
+                },
+                _ => {
+                    let c : Int = p._1;
+                    c
+                },
+            },
+            _ => match p._1 {
+                0 => {
+                    let b : Int = p._0;
+                    b
+                },
+                1 => {
+                    let d : Int = p._0;
+                    d
+                },
+                _ => 5,
+            },
+        }
     };
-() : ()
+    ()
+} : ()
 
 stderr:

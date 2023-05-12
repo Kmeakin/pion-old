@@ -5,7 +5,7 @@ use pion_source::location::ByteRange;
 use pion_surface::syntax::{Plicity, Symbol};
 use scoped_arena::Scope;
 
-use crate::env::{EnvLen, Index, Level, SharedEnv, UniqueEnv};
+use crate::env::{EnvLen, Index, Level, SharedEnv};
 use crate::prim::Prim;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

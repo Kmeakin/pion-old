@@ -1,23 +1,30 @@
 exit status: 0
 stdout:
-let and1 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+{
+    let and1 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         true => match (x, y)._1 {
             true => true,
             _ => false,
         },
         _ => false,
     };
-let and2 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+    let and2 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         true => match (x, y)._1 {
             true => true,
             _ => false,
         },
         _ => false,
     };
-let and3 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+    let and3 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         false => match (x, y)._1 {
             false => false,
             true => false,
@@ -27,24 +34,30 @@ let and3 : Bool -> Bool -> Bool =
             true => true,
         },
     };
-let or1 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+    let or1 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         false => match (x, y)._1 {
             false => false,
             _ => true,
         },
         _ => true,
     };
-let or2 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+    let or2 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         false => match (x, y)._1 {
             false => false,
             _ => true,
         },
         _ => true,
     };
-let or3 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+    let or3 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         false => match (x, y)._1 {
             false => false,
             true => true,
@@ -54,8 +67,10 @@ let or3 : Bool -> Bool -> Bool =
             true => true,
         },
     };
-let xor1 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+    let xor1 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         false => match (x, y)._1 {
             true => true,
             _ => false,
@@ -65,8 +80,10 @@ let xor1 : Bool -> Bool -> Bool =
             _ => false,
         },
     };
-let xor2 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+    let xor2 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         false => match (x, y)._1 {
             true => true,
             _ => false,
@@ -76,8 +93,10 @@ let xor2 : Bool -> Bool -> Bool =
             _ => false,
         },
     };
-let xor3 : Bool -> Bool -> Bool =
-    fun (x : Bool) (y : Bool) => match (x, y)._0 {
+    let xor3 : Bool -> Bool -> Bool = fun (x : Bool) (y : Bool) => match (
+        x,
+        y,
+    )._0 {
         false => match (x, y)._1 {
             false => false,
             true => true,
@@ -87,6 +106,7 @@ let xor3 : Bool -> Bool -> Bool =
             true => false,
         },
     };
-() : ()
+    ()
+} : ()
 
 stderr:

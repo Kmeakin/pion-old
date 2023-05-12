@@ -1,10 +1,11 @@
 exit status: 0
 stdout:
-let _ : Int =
-    match true {
+{
+    let _ : Int = match true {
         false => 0,
         true => 1,
     };
-() : ()
+    ()
+} : ()
 
 stderr:

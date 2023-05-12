@@ -1,6 +1,8 @@
 exit status: 0
 stdout:
-let _ : Bool -> Bool = fun (x : Bool) => x;
-() : ()
+{
+    let _ : Bool -> Bool = fun (x : Bool) => x;
+    ()
+} : ()
 
 stderr:

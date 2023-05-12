@@ -50,7 +50,7 @@ pub enum Expr<'arena, Extra = ByteRange> {
         Extra,
         &'arena (Self, Block<'arena, Extra>, Block<'arena, Extra>),
     ),
-    Block(Extra, Block<'arena>),
+    Block(Extra, Block<'arena, Extra>),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

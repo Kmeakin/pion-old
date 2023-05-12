@@ -1,11 +1,13 @@
 exit status: 0
 stdout:
-let _ : () = ();
-let x : Bool = (false, true)._0;
-let y : Bool = (false, true)._1;
-let a : Bool = (false, true)._0;
-let b : Bool = (false, true)._1;
-let _ : (Bool, Bool) = (false, true);
-() : ()
+{
+    let _ : () = ();
+    let x : Bool = (false, true)._0;
+    let y : Bool = (false, true)._1;
+    let a : Bool = (false, true)._0;
+    let b : Bool = (false, true)._1;
+    let _ : (Bool, Bool) = (false, true);
+    ()
+} : ()
 
 stderr:
