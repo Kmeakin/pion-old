@@ -24,20 +24,6 @@ impl<'arena> PrettyCtx<'arena> {
             Expr::Placeholder(_) => self.text("_"),
             Expr::Hole(_, name) => self.text("?").append(name.as_str()),
             Expr::Ident(_, name) => self.text(name.as_str()),
-            Expr::Let(_, (def, body)) => self
-                .text("let ")
-                .append(self.pat(&def.pat))
-                .append(
-                    def.r#type
-                        .as_ref()
-                        .map(|r#type| self.text(" : ").append(self.expr(r#type))),
-                )
-                .append(" =")
-                .append(self.line().append(self.expr(&def.expr)).nest(INDENT))
-                .append(";")
-                .group()
-                .append(self.line())
-                .append(self.expr(body)),
             Expr::Arrow(_, plicity, (r#type, body)) => self
                 .plicity(*plicity)
                 .append(self.expr(r#type))
@@ -172,10 +158,6 @@ impl<'arena> PrettyCtx<'arena> {
         separator: DocBuilder<'arena>,
         end_delim: DocBuilder<'arena>,
     ) -> DocBuilder<'arena> {
-        // if docs.len() == 0 {
-        //     return self.concat([start_delim, end_delim]);
-        // }
-
         let docs = self.intersperse(docs, self.concat([separator.clone(), self.line()]));
         self.concat([
             start_delim,

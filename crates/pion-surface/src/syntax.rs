@@ -36,7 +36,6 @@ pub enum Expr<'arena, Extra = ByteRange> {
     Placeholder(Extra),
     Hole(Extra, Symbol),
     Ident(Extra, Symbol),
-    Let(Extra, &'arena (LetDef<'arena, Extra>, Self)),
     Arrow(Extra, Plicity, &'arena (Self, Self)),
     FunType(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
     FunLit(Extra, &'arena [Param<'arena, Extra>], &'arena Self),
@@ -110,7 +109,6 @@ impl<'arena, Extra> Expr<'arena, Extra> {
             | Expr::Placeholder(range, ..)
             | Expr::Hole(range, ..)
             | Expr::Ident(range, ..)
-            | Expr::Let(range, ..)
             | Expr::Arrow(range, ..)
             | Expr::FunType(range, ..)
             | Expr::FunLit(range, ..)
@@ -348,15 +346,6 @@ impl<'arena> Builder<'arena> {
         r#type: Expr<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
         Expr::Ann(range.into(), self.scope.to_scope((expr, r#type)))
-    }
-
-    pub fn r#let<Extra>(
-        &self,
-        range: impl Into<Extra>,
-        def: LetDef<'arena, Extra>,
-        body: Expr<'arena, Extra>,
-    ) -> Expr<'arena, Extra> {
-        Expr::Let(range.into(), self.scope.to_scope((def, body)))
     }
 
     pub fn arrow<Extra>(
