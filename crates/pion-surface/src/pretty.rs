@@ -50,7 +50,13 @@ impl<'arena> PrettyCtx<'arena> {
                 .append(self.expr(body)),
             Expr::FunApp(_, fun, args) => self
                 .expr(fun)
-                .append(self.concat(args.iter().map(|arg| self.space().append(self.arg(arg))))),
+                .append("(")
+                .append(self.intersperse(
+                    args.iter().map(|arg| self.arg(arg)),
+                    self.text(",").append(self.line()),
+                ))
+                .append(")")
+                .group(),
             Expr::RecordType(_, fields) => self.sequence(
                 true,
                 self.text("{"),

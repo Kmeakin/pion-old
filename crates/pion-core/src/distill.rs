@@ -240,7 +240,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
 
                 while let Expr::FunApp(plicity, (next_fun, arg)) = fun {
                     fun = next_fun;
-                    let expr = self.expr_prec(Prec::Proj, arg);
+                    let expr = self.expr_prec(Prec::Top, arg);
                     args.push(Arg {
                         extra: (),
                         plicity: *plicity,
@@ -248,7 +248,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                     });
                 }
 
-                let fun = self.expr_prec(Prec::Proj, fun);
+                let fun = self.expr_prec(Prec::App, fun);
                 let args = self.scope.to_scope_from_iter(args.into_iter().rev());
                 self.paren(prec > Prec::App, builder.fun_app((), fun, args))
             }

@@ -71,14 +71,14 @@ LetDef: LetDef<'arena> = {
 }
 
 FunExpr: Expr<'arena> = {
-    <start: @L> <plicity: Plicity> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => builder.arrow((start, end), plicity, arg, body),
+    <start: @L> <arg: AppExpr> "->" <body: FunExpr> <end: @R> => builder.arrow((start, end), Plicity::Explicit, arg, body),
     <start: @L> "fun" <params: Param+> "->" <body: FunExpr> <end: @R> => builder.fun_type((start, end), scope.to_scope_from_iter(params), body),
     <start: @L> "fun" <params: Param+> "=>" <body: LetExpr> <end: @R> => builder.fun_lit((start, end), scope.to_scope_from_iter(params), body),
     AppExpr => <>,
 }
 
 AppExpr: Expr<'arena> = {
-    <start: @L> <fun: ProjExpr> <args: Arg+> <end: @R> => builder.fun_app((start, end), fun, scope.to_scope_from_iter(args)),
+    <start: @L> <fun: AppExpr> "(" <args: Seq<Arg, ",">> ")" <end: @R> => builder.fun_app((start, end), fun, args),
     ProjExpr => <>,
 }
 
@@ -139,7 +139,7 @@ Param: Param<'arena> = {
 }
 
 Arg: Arg<'arena> = {
-    <start: @L> <plicity: Plicity> <expr: ProjExpr> <end: @R> => Arg {extra: ByteRange::new(start, end), plicity, expr},
+    <start: @L> <plicity: Plicity> <expr: Expr> <end: @R> => Arg {extra: ByteRange::new(start, end), plicity, expr},
 }
 
 #[inline]

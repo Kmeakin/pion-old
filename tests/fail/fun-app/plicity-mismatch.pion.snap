@@ -12,16 +12,16 @@ stderr:
 error: tried to apply implicit argument where explicit argument was expected
   ┌─ tests/fail/fun-app/plicity-mismatch.pion:7:20
   │
-7 │ let _ : Bool = id1 @Bool true;
+7 │ let _ : Bool = id1(@Bool, true);
   │                --- ^^^^^ implicit argument
   │                │    
   │                explicit function of type `fun (A : Type) -> A -> A`
 
 error: tried to apply implicit argument where explicit argument was expected
-  ┌─ tests/fail/fun-app/plicity-mismatch.pion:8:26
+  ┌─ tests/fail/fun-app/plicity-mismatch.pion:8:27
   │
-8 │ let _ : Bool = id2 @Bool @true;
-  │                ---       ^^^^^ implicit argument
-  │                │          
+8 │ let _ : Bool = id2(@Bool, @true);
+  │                ---        ^^^^^ implicit argument
+  │                │           
   │                explicit function of type `fun (@A : Type) -> A -> A`
 

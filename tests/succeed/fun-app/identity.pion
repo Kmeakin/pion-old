@@ -1,3 +1,3 @@
 //~ run = "${PION} elab ${FILE}"
 
-(fun (A : Type) (a : A) => a) Bool false
+(fun (A : Type) (a : A) => a)(Bool, false)

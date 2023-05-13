@@ -2,12 +2,12 @@
 
 {
 let id = fun (x : Bool) => x;
-let _ = id false true;
-let _ = id false true true;
+let _ = id(false, true);
+let _ = id(false, true, true);
 
 let always = fun (x : Bool) (y : Int) => y;
-let _ = always false 0 true;
-let _ = always false 0 true true;
+let _ = always(false, 0, true);
+let _ = always(false, 0, true, true);
 
 Type
 }

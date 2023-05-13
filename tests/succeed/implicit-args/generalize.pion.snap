@@ -7,7 +7,7 @@ stdout:
     (a : A)
     (b : B) => a;
     let apply : fun (@A : Type) (@B : Type) -> (A -> B) -> A ->
-    B = fun (@A : Type) (@B : Type) (f : A -> B) (x : A) => f x;
+    B = fun (@A : Type) (@B : Type) (f : A -> B) (x : A) => f(x);
     ()
 } : ()
 

@@ -1,5 +1,5 @@
 exit status: 0
 stdout:
-(fun (A : Type) (a : A) => a) Bool false : Bool
+(fun (A : Type) (a : A) => a)(Bool, false) : Bool
 
 stderr:
