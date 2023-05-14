@@ -76,7 +76,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
 
                 let expr = self.elab_match(
                     PatMatrix::singleton(scrut, pat),
-                    &[Body::new(body_expr, defs)],
+                    &[Body::new(defs, body_expr)],
                     range,
                     range,
                 );
@@ -388,7 +388,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 let codomain = self.with_param(name, scrut.r#type.clone(), |this| {
                     this.elab_match(
                         PatMatrix::singleton(scrut, pat),
-                        &[Body::new(codomain, defs)],
+                        &[Body::new(defs, codomain)],
                         range,
                         range,
                     )
@@ -426,17 +426,13 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 let (expr, r#type) = self.with_param(name, scrut.r#type.clone(), |this| {
                     let body_expr = this.elab_match(
                         matrix.clone(),
-                        &[Body::new(body_expr, defs.clone())],
+                        &[Body::new(defs.clone(), body_expr)],
                         range,
                         range,
                     );
 
-                    let body_type = this.elab_match(
-                        matrix,
-                        &[Body::new(body_type, defs.clone())],
-                        range,
-                        range,
-                    );
+                    let body_type =
+                        this.elab_match(matrix, &[Body::new(defs, body_type)], range, range);
 
                     let expr = this
                         .expr_builder()
@@ -487,7 +483,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                         let body_expr = self.with_param(name, scrut.r#type.clone(), |this| {
                             this.elab_match(
                                 PatMatrix::singleton(scrut, pat),
-                                &[Body::new(body_expr, defs)],
+                                &[Body::new(defs, body_expr)],
                                 range,
                                 range,
                             )
@@ -549,7 +545,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             self.local_env.truncate(initial_len);
 
             rows.push(PatRow::singleton((pat, scrut.clone())));
-            bodies.push(Body::new(expr, defs));
+            bodies.push(Body::new(defs, expr));
         }
 
         let matrix = PatMatrix::new(rows);
@@ -577,7 +573,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
 
                 self.elab_match(
                     PatMatrix::singleton(scrut, pat),
-                    &[Body::new(body_expr, defs)],
+                    &[Body::new(defs, body_expr)],
                     range,
                     range,
                 )

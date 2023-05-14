@@ -164,15 +164,15 @@ pub type RowEntry<'arena> = (Pat<'arena>, Scrut<'arena>);
 #[derive(Debug, Clone)]
 /// The right hand side of a match clause
 pub struct Body<'arena> {
-    /// The expression to be evaluated
-    expr: Expr<'arena>,
     /// The variables to be let-bound before `expr` is evaluated
     defs: Vec<(Option<Symbol>, Scrut<'arena>)>,
+    /// The expression to be evaluated
+    expr: Expr<'arena>,
 }
 
 impl<'arena> Body<'arena> {
-    pub fn new(expr: Expr<'arena>, defs: Vec<(Option<Symbol>, Scrut<'arena>)>) -> Self {
-        Self { expr, defs }
+    pub fn new(defs: Vec<(Option<Symbol>, Scrut<'arena>)>, expr: Expr<'arena>) -> Self {
+        Self { defs, expr }
     }
 }
 
