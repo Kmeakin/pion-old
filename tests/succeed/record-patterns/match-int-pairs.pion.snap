@@ -1,21 +1,22 @@
 exit status: 0
 stdout:
 let f1 : Int -> Int -> Int =
-    fun (x : Int) (y : Int) => match (x, y)._0 {
-        0 => let a : Int = (x, y)._1;
+    fun (x : Int) (y : Int) => let a : (Int, Int) = (x, y);
+    match a._0 {
+        0 => let a : Int = a._1;
         a,
-        1 => match (x, y)._1 {
-            0 => let b : Int = (x, y)._0;
+        1 => match a._1 {
+            0 => let b : Int = a._0;
             b,
-            1 => let c : Int = (x, y)._1;
+            1 => let c : Int = a._1;
             c,
-            _ => let c : Int = (x, y)._1;
+            _ => let c : Int = a._1;
             c,
         },
-        _ => match (x, y)._1 {
-            0 => let b : Int = (x, y)._0;
+        _ => match a._1 {
+            0 => let b : Int = a._0;
             b,
-            1 => let d : Int = (x, y)._0;
+            1 => let d : Int = a._0;
             d,
             _ => 5,
         },

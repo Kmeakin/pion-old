@@ -64,24 +64,26 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             surface::Expr::Let(_, (def, body)) => {
                 let range = def.pat.range();
                 let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
-                let def_expr = self.check(&def.expr, &type_value);
-                let def_value = self.eval_env().eval(&def_expr);
-                let scrut = Scrut::new(def_expr, type_value);
+                let expr = self.check(&def.expr, &type_value);
+                let value = self.eval_env().eval(&expr);
+                let scrut = Scrut::new(expr, type_value);
 
-                let (defs, body_expr, body_type) = self.with_scope(|this| {
-                    let defs = this.push_def_pat(&pat, &scrut, &def_value);
-                    let (body_expr, body_type) = this.synth(body);
-                    (defs, body_expr, body_type)
-                });
+                let once = scrut.expr.is_atomic() || pat.is_atomic();
+                self.ensure_bound_once(scrut, &value, once, |this, scrut| {
+                    let (defs, body_expr, body_type) = this.with_scope(|this| {
+                        let defs = this.push_def_pat(&pat, &scrut, &value);
+                        let (body_expr, body_type) = this.synth(body);
+                        (defs, body_expr, body_type)
+                    });
 
-                let expr = self.elab_match(
-                    PatMatrix::singleton(scrut, pat),
-                    &[Body::new(defs, body_expr)],
-                    range,
-                    range,
-                );
-
-                (expr, body_type)
+                    let expr = this.elab_match(
+                        PatMatrix::singleton(scrut, pat),
+                        &[Body::new(defs, body_expr)],
+                        range,
+                        range,
+                    );
+                    (expr, body_type)
+                })
             }
             surface::Expr::Arrow(_, plicity, (domain, codomain)) => {
                 let domain = self.check(domain, &Type::TYPE);
@@ -536,21 +538,30 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         let mut rows = Vec::with_capacity(cases.len());
         let mut bodies = Vec::with_capacity(cases.len());
 
-        for case in cases {
-            let pat = self.check_pat(&case.pat, &scrut.r#type);
+        let pats: Vec<_> = cases
+            .iter()
+            .map(|case| self.check_pat(&case.pat, &scrut.r#type))
+            .collect();
 
-            let initial_len = self.local_env.len();
-            let defs = self.push_match_pat(&pat, &scrut, &scrut_value);
-            let expr = self.check(&case.expr, &expected_type);
-            self.local_env.truncate(initial_len);
+        let once = scrut.expr.is_atomic() || pats.iter().all(Pat::is_atomic);
 
-            rows.push(PatRow::singleton((pat, scrut.clone())));
-            bodies.push(Body::new(defs, expr));
-        }
+        self.ensure_bound_once(scrut, &scrut_value, once, |this, scrut| {
+            for (pat, case) in pats.into_iter().zip(cases.iter()) {
+                let initial_len = this.local_env.len();
+                let defs = this.push_match_pat(&pat, &scrut, &scrut_value);
+                let expr = this.check(&case.expr, &expected_type);
+                this.local_env.truncate(initial_len);
 
-        let matrix = PatMatrix::new(rows);
+                rows.push(PatRow::singleton((pat, scrut.clone())));
+                bodies.push(Body::new(defs, expr));
+            }
 
-        self.elab_match(matrix, &bodies, range, scrut_range)
+            let matrix = PatMatrix::new(rows);
+
+            let expr = this.elab_match(matrix, &bodies, range, scrut_range);
+            (expr, ())
+        })
+        .0
     }
 
     pub fn check(&mut self, expr: &surface::Expr, expected: &Type<'arena>) -> Expr<'arena> {
@@ -561,22 +572,27 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             (surface::Expr::Let(_, (def, body)), _) => {
                 let range = def.pat.range();
                 let (pat, type_value) = self.synth_ann_pat(&def.pat, &def.r#type);
-                let def_expr = self.check(&def.expr, &type_value);
-                let def_value = self.eval_env().eval(&def_expr);
-                let scrut = Scrut::new(def_expr, type_value);
+                let expr = self.check(&def.expr, &type_value);
+                let value = self.eval_env().eval(&expr);
+                let scrut = Scrut::new(expr, type_value);
 
-                let (defs, body_expr) = self.with_scope(|this| {
-                    let defs = this.push_def_pat(&pat, &scrut, &def_value);
-                    let body_expr = this.check(body, &expected);
-                    (defs, body_expr)
-                });
+                let once = scrut.expr.is_atomic() || pat.is_atomic();
+                self.ensure_bound_once(scrut, &value, once, |this, scrut| {
+                    let (defs, body_expr) = this.with_scope(|this| {
+                        let defs = this.push_def_pat(&pat, &scrut, &value);
+                        let body_expr = this.check(body, &expected);
+                        (defs, body_expr)
+                    });
 
-                self.elab_match(
-                    PatMatrix::singleton(scrut, pat),
-                    &[Body::new(defs, body_expr)],
-                    range,
-                    range,
-                )
+                    let expr = this.elab_match(
+                        PatMatrix::singleton(scrut, pat),
+                        &[Body::new(defs, body_expr)],
+                        range,
+                        range,
+                    );
+                    (expr, ())
+                })
+                .0
             }
             (surface::Expr::FunLit(range, params, body), _) => {
                 self.local_env.reserve(params.len());
@@ -661,6 +677,39 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                     error,
                 });
                 Expr::Error
+            }
+        }
+    }
+
+    fn ensure_bound_once<T>(
+        &mut self,
+        mut scrut: Scrut<'arena>,
+        value: &Value<'arena>,
+        once: bool,
+        f: impl FnOnce(&mut Self, Scrut<'arena>) -> (Expr<'arena>, T),
+    ) -> (Expr<'arena>, T) {
+        let (scrut, extra_def) = if once {
+            (scrut, None)
+        } else {
+            let name = None;
+            let r#type = self.quote_env().quote(&scrut.r#type);
+            let expr = scrut.expr;
+
+            scrut.expr = Expr::Local(Index::new());
+            self.local_env
+                .push_def(name, scrut.r#type.clone(), value.clone());
+            let extra_def = Some(LetDef { name, r#type, expr });
+            (scrut, extra_def)
+        };
+
+        let (expr, extra) = f(self, scrut);
+
+        match extra_def {
+            None => (expr, extra),
+            Some(def) => {
+                self.local_env.pop();
+                let expr = self.expr_builder().r#let(def, expr);
+                (expr, extra)
             }
         }
     }

@@ -35,6 +35,20 @@ impl<'arena> Expr<'arena> {
             .any(|(env, expr)| matches!(expr, Expr::Local(var) if env == *var))
     }
 
+    pub fn is_atomic(&self) -> bool {
+        match self {
+            Expr::Error | Expr::Lit(_) | Expr::Prim(_) | Expr::Local(_) | Expr::Meta(_) => true,
+            Expr::RecordLit(labels, ..) | Expr::RecordType(labels, ..) => labels.is_empty(),
+            Expr::InsertedMeta(..)
+            | Expr::Let(_)
+            | Expr::FunType(..)
+            | Expr::FunLit(..)
+            | Expr::FunApp(..)
+            | Expr::RecordProj(..)
+            | Expr::Match(..) => false,
+        }
+    }
+
     #[must_use]
     pub fn shift(&self, scope: &'arena Scope<'arena>, amount: EnvLen) -> Expr<'arena> {
         self.shift_inner(scope, Index::new(), amount)
@@ -289,6 +303,13 @@ impl<'arena, Extra> Pat<'arena, Extra> {
     /// scrutinee
     pub fn is_wildcard(&self) -> bool {
         matches!(self, Pat::Error(..) | Pat::Ignore(..) | Pat::Ident(..))
+    }
+
+    pub fn is_atomic(&self) -> bool {
+        match self {
+            Pat::Error(_) | Pat::Ignore(_) | Pat::Ident(..) | Pat::Lit(..) => true,
+            Pat::RecordLit(_, labels, ..) => labels.is_empty(),
+        }
     }
 }
 

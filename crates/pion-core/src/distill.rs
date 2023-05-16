@@ -144,13 +144,14 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
             Expr::Prim(primitive) => prim(*primitive),
             Expr::Let((def, body)) => {
                 let name = def.name;
+                let name = self.freshen_name(name, body);
+
                 let def = surface::LetDef {
-                    pat: name_to_pat(def.name),
+                    pat: name_to_pat(name),
                     r#type: Some(self.expr_prec(Prec::Top, &def.r#type)),
                     expr: self.expr_prec(Prec::Let, &def.expr),
                 };
 
-                let name = self.freshen_name(name, body);
                 self.push_local(name);
                 let body = self.expr_prec(Prec::Let, body);
                 self.pop_local();

@@ -1,10 +1,14 @@
 exit status: 0
 stdout:
 let _ : () = ();
-let x : Bool = (false, true)._0;
-let y : Bool = (false, true)._1;
-let a : Bool = (false, true)._0;
-let b : Bool = (false, true)._1;
+let a : (Bool, Bool) = (false, true);
+let x : Bool = a._0;
+let y : Bool = a._1;
+let b : (Bool, Bool) = (false, true);
+let a : Bool = b._0;
+let c : (Bool, Bool) = (false, true);
+let b : Bool = c._1;
+let _ : (Bool, Bool) = (false, true);
 let _ : (Bool, Bool) = (false, true);
 () : ()
 

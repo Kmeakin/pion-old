@@ -1,7 +1,8 @@
 exit status: 0
 stdout:
-let x : Bool = (true, false, true)._0;
-let y : Bool = (true, false, true)._1;
+let a : (Bool, Bool, Bool) = (true, false, true);
+let x : Bool = a._0;
+let y : Bool = a._1;
 () : ()
 
 stderr:
