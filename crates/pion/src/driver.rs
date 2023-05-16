@@ -71,12 +71,11 @@ impl Driver {
         scope: &'scope Scope<'scope>,
         file_id: usize,
     ) -> pion_surface::syntax::Expr<'scope> {
-        let mut errors = Vec::new();
+        let mut on_message = |message: pion_surface::reporting::Message| {
+            self.emit_diagnostic(message.to_diagnostic(file_id))
+        };
         let input = self.files.get(file_id).unwrap();
-        let expr = pion_surface::syntax::Expr::parse(scope, &mut errors, input.source());
-        for error in errors {
-            self.emit_diagnostic(error.to_diagnostic(file_id))
-        }
+        let expr = pion_surface::syntax::Expr::parse(scope, &mut on_message, input.source());
         expr
     }
 
@@ -85,12 +84,11 @@ impl Driver {
         scope: &'scope Scope<'scope>,
         file_id: usize,
     ) -> pion_surface::syntax::Module<'scope> {
-        let mut errors = Vec::new();
+        let mut on_message = |message: pion_surface::reporting::Message| {
+            self.emit_diagnostic(message.to_diagnostic(file_id))
+        };
         let input = self.files.get(file_id).unwrap();
-        let module = pion_surface::syntax::Module::parse(scope, &mut errors, input.source());
-        for error in errors {
-            self.emit_diagnostic(error.to_diagnostic(file_id))
-        }
+        let module = pion_surface::syntax::Module::parse(scope, &mut on_message, input.source());
         module
     }
 }

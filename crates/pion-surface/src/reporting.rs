@@ -15,7 +15,7 @@ impl TokenError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SyntaxError {
+pub enum Message {
     Lexer(TokenError),
     IntLit(ByteRange, lexical::Error),
     InvalidToken(ByteRange),
@@ -46,7 +46,7 @@ impl TokenError {
     }
 }
 
-impl SyntaxError {
+impl Message {
     pub fn to_diagnostic(&self, file_id: usize) -> Diagnostic<usize> {
         let primary_label = |range: &ByteRange| Label::primary(file_id, *range);
 

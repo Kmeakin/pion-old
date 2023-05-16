@@ -12,7 +12,7 @@
 )]
 
 pub mod pretty;
-mod reporting;
+pub mod reporting;
 pub mod syntax;
 pub mod tokens;
 

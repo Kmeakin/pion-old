@@ -4,7 +4,7 @@ pub use pion_source::input::InputString;
 use pion_source::location::{BytePos, ByteRange};
 use scoped_arena::Scope;
 
-use crate::reporting::{SyntaxError, TokenError};
+use crate::reporting::{Message, TokenError};
 use crate::tokens::{self, Token};
 
 pub type Symbol = ustr::Ustr;
@@ -18,19 +18,23 @@ impl<'arena, Extra> Module<'arena, Extra> {
     pub fn new(items: &'arena [Item<'arena, Extra>]) -> Self { Self { items } }
 }
 
-impl<'arena> Module<'arena, ByteRange> {
+impl<'arena, 'message> Module<'arena, ByteRange> {
     pub fn parse(
         scope: &'arena Scope<'arena>,
-        errors: &mut Vec<SyntaxError>,
+        on_message: &'message mut dyn FnMut(Message),
         input: &InputString,
     ) -> Self {
         let tokens = tokens::tokens(input);
-        match crate::grammar::ModuleParser::new().parse(Builder::new(scope), scope, errors, tokens)
-        {
+        match crate::grammar::ModuleParser::new().parse(
+            Builder::new(scope),
+            scope,
+            on_message,
+            tokens,
+        ) {
             Ok(module) => module,
             Err(err) => {
-                let err = SyntaxError::from_lalrpop(err);
-                errors.push(err);
+                let err = Message::from_lalrpop(err);
+                on_message(err);
                 Module::new(&[])
             }
         }
@@ -147,19 +151,24 @@ impl<'arena, Extra> Expr<'arena, Extra> {
     }
 }
 
-impl<'arena> Expr<'arena, ByteRange> {
+impl<'arena, 'message> Expr<'arena, ByteRange> {
     pub fn parse(
         scope: &'arena Scope<'arena>,
-        errors: &mut Vec<SyntaxError>,
+        on_message: &'message mut dyn FnMut(Message),
         input: &InputString,
     ) -> Self {
         let tokens = tokens::tokens(input);
-        match crate::grammar::ExprParser::new().parse(Builder::new(scope), scope, errors, tokens) {
+        match crate::grammar::ExprParser::new().parse(
+            Builder::new(scope),
+            scope,
+            on_message,
+            tokens,
+        ) {
             Ok(expr) => expr,
             Err(err) => {
-                let err = SyntaxError::from_lalrpop(err);
+                let err = Message::from_lalrpop(err);
                 let range = err.range();
-                errors.push(err);
+                on_message(err);
                 Expr::Error(range)
             }
         }
@@ -286,7 +295,7 @@ pub fn print_decimal_integer(input: u32) -> String {
 pub type LalrpopParseError<'src> = lalrpop_util::ParseError<BytePos, Token<'src>, TokenError>;
 pub type LalrpopErrorRecovery<'src> = lalrpop_util::ErrorRecovery<BytePos, Token<'src>, TokenError>;
 
-impl SyntaxError {
+impl Message {
     pub const fn range(&self) -> ByteRange {
         match self {
             Self::Lexer(err) => err.range(),
