@@ -31,7 +31,7 @@ pub fn compile_match<'arena>(
             let def_expr = scrut.expr.shift(ctx.scope, shift_amount);
             let def_value = ctx.eval_env().eval(&def_expr);
             ctx.local_env
-                .push_def(def_name, def_value, scrut.r#type.clone());
+                .push_def(def_name, scrut.r#type.clone(), def_value);
             shift_amount.push();
             (LetDef::new(def_name, def_type, def_expr), Expr::Error)
         });
