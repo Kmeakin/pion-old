@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term::termcolor::ColorChoice;
@@ -61,9 +59,8 @@ impl Driver {
         .expect("Cannot emit diagnostic");
     }
 
-    pub fn add_file(&mut self, path: &Path, contents: InputString) -> usize {
-        self.files
-            .add(path.to_string_lossy().into_owned(), contents)
+    pub fn add_file(&mut self, path: String, contents: InputString) -> usize {
+        self.files.add(path, contents)
     }
 
     pub fn parse_expr<'scope>(
