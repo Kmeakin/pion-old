@@ -71,7 +71,7 @@ pub fn compile_match<'arena>(
                         let mut matrix = matrix.default();
 
                         let value = ctx.eval_env().eval(&scrut_expr);
-                        ctx.local_env.push_def(None, value, scrut.r#type.clone());
+                        ctx.local_env.push_def(None, scrut.r#type.clone(), value);
                         shift_amount.push();
                         let body = compile_match(ctx, &mut matrix, bodies, shift_amount);
                         ctx.local_env.pop();
