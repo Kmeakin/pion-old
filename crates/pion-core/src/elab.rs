@@ -324,7 +324,7 @@ pub fn elab_module<'arena>(
 
         match item {
             surface::Item::Def(def) => {
-                let (r#type, expr) = match def.r#type {
+                let (expr, r#type) = match def.r#type {
                     Some(r#type) => {
                         let r#type = elab_ctx.check(&r#type, &Type::TYPE);
                         let type_value = elab_ctx.eval_env().eval(&r#type);

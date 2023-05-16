@@ -1,7 +1,7 @@
 exit status: 0
 stdout:
-def foo : false = Bool;
+def foo : Bool = false;
 
-def bar : true = Bool;
+def bar : Bool = true;
 
 stderr:
