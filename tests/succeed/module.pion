@@ -1,0 +1,5 @@
+//~ run = "${PION} elab-module ${FILE}"
+
+def foo = false;
+
+def bar : Bool = true;

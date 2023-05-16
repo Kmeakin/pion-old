@@ -31,6 +31,16 @@ impl Driver {
         self.emit_doc(doc)
     }
 
+    pub fn emit_module<'scope, Extra>(
+        &self,
+        scope: &'scope Scope<'scope>,
+        module: &pion_surface::syntax::Module<'_, Extra>,
+    ) {
+        let pretty_ctx = pion_surface::pretty::PrettyCtx::new(scope);
+        let doc = pretty_ctx.module(module).into_doc();
+        self.emit_doc(doc)
+    }
+
     pub fn emit_doc(&self, doc: pretty::RefDoc) {
         println!("{}", doc.pretty(self.output_width));
     }
@@ -68,5 +78,19 @@ impl Driver {
             self.emit_diagnostic(error.to_diagnostic(file_id))
         }
         expr
+    }
+
+    pub fn parse_module<'scope>(
+        &self,
+        scope: &'scope Scope<'scope>,
+        file_id: usize,
+    ) -> pion_surface::syntax::Module<'scope> {
+        let mut errors = Vec::new();
+        let input = self.files.get(file_id).unwrap();
+        let module = pion_surface::syntax::Module::parse(scope, &mut errors, input.source());
+        for error in errors {
+            self.emit_diagnostic(error.to_diagnostic(file_id))
+        }
+        module
     }
 }

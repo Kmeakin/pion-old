@@ -14,6 +14,33 @@ type DocBuilder<'arena> = pretty::DocBuilder<'arena, PrettyCtx<'arena>>;
 impl<'arena> PrettyCtx<'arena> {
     pub fn new(scope: &'arena Scope<'arena>) -> Self { Self { scope } }
 
+    pub fn module<Extra>(&'arena self, module: &Module<'_, Extra>) -> DocBuilder<'arena> {
+        self.intersperse(
+            module.items.iter().map(|item| self.item(item)),
+            self.hardline().append(self.hardline()),
+        )
+    }
+
+    fn item<Extra>(&'arena self, item: &Item<'_, Extra>) -> DocBuilder<'arena> {
+        match item {
+            Item::Def(def) => self.def(def),
+        }
+    }
+
+    fn def<Extra>(&'arena self, def: &Def<'_, Extra>) -> DocBuilder<'arena> {
+        let r#type = match &def.r#type {
+            None => self.nil(),
+            Some(r#type) => self.text(" : ").append(self.expr(r#type)),
+        };
+        let expr = self.expr(&def.expr);
+        self.text("def ")
+            .append(self.ident(def.name))
+            .append(r#type)
+            .append(" = ")
+            .append(expr)
+            .append(";")
+    }
+
     #[allow(clippy::too_many_lines)]
     pub fn expr<Extra>(&'arena self, expr: &Expr<'_, Extra>) -> DocBuilder<'arena> {
         match expr {

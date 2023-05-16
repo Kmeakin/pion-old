@@ -48,8 +48,16 @@ extern {
     }
 }
 
-pub Def: Def<'arena> = {
-    <start: @L> "def" <name: Ident> <r#type: Ann?> "=" <expr: Expr> ";" <end: @R> => builder.def((start, end), name, r#type, expr),
+pub Module: Module<'arena> = {
+    <items: Item*> => Module::new(scope.to_scope_from_iter(items)),
+}
+
+Item: Item<'arena> = {
+    <def: Def> => Item::Def(def),
+}
+
+Def: Def<'arena> = {
+    <start: @L> "def" <name: Ident> <r#type: Ann?> "=" <expr: Expr> ";" <end: @R> => Def::new(ByteRange::new(start, end), name, r#type, expr),
 }
 
 pub Expr: Expr<'arena> = {

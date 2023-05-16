@@ -1,5 +1,6 @@
 #![warn(clippy::all, clippy::nursery, clippy::pedantic, unused_qualifications)]
 #![allow(
+    clippy::len_without_is_empty,
     clippy::match_bool,
     clippy::missing_const_for_fn,
     clippy::missing_errors_doc,
@@ -9,9 +10,9 @@
     clippy::new_without_default,
     clippy::option_if_let_else,
     clippy::similar_names,
+    clippy::single_match_else,
     clippy::too_many_lines,
-    clippy::wildcard_imports,
-    clippy::len_without_is_empty
+    clippy::wildcard_imports
 )]
 
 pub mod distill;

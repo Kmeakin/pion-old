@@ -14,6 +14,29 @@ pub struct Module<'arena, Extra = ByteRange> {
     pub items: &'arena [Item<'arena, Extra>],
 }
 
+impl<'arena, Extra> Module<'arena, Extra> {
+    pub fn new(items: &'arena [Item<'arena, Extra>]) -> Self { Self { items } }
+}
+
+impl<'arena> Module<'arena, ByteRange> {
+    pub fn parse(
+        scope: &'arena Scope<'arena>,
+        errors: &mut Vec<SyntaxError>,
+        input: &InputString,
+    ) -> Self {
+        let tokens = tokens::tokens(input);
+        match crate::grammar::ModuleParser::new().parse(Builder::new(scope), scope, errors, tokens)
+        {
+            Ok(module) => module,
+            Err(err) => {
+                let err = SyntaxError::from_lalrpop(err);
+                errors.push(err);
+                Module::new(&[])
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Item<'arena, Extra = ByteRange> {
     Def(Def<'arena, Extra>),
@@ -25,6 +48,22 @@ pub struct Def<'arena, Extra = ByteRange> {
     pub name: Symbol,
     pub r#type: Option<Expr<'arena, Extra>>,
     pub expr: Expr<'arena, Extra>,
+}
+
+impl<'arena, Extra> Def<'arena, Extra> {
+    pub fn new(
+        extra: Extra,
+        name: Symbol,
+        r#type: Option<Expr<'arena, Extra>>,
+        expr: Expr<'arena, Extra>,
+    ) -> Self {
+        Self {
+            extra,
+            name,
+            r#type,
+            expr,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

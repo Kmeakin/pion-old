@@ -14,6 +14,7 @@ mod driver;
 enum Opts {
     Parse { file: PathBuf },
     Elab { file: PathBuf },
+    ElabModule { file: PathBuf },
     Eval { file: PathBuf },
 }
 
@@ -64,6 +65,25 @@ fn main() {
             let mut distill_ctx = elab_ctx.distill_ctx();
             let expr = distill_ctx.ann_expr(&expr, &r#type);
             driver.emit_expr(&scope, &expr);
+        }
+        Opts::ElabModule { file } => {
+            let contents = unwrap_or_exit(read_file(&file));
+            let file_id = driver.add_file(&file, contents);
+            let module = driver.parse_module(&scope, file_id);
+
+            let mut on_message = |message: pion_core::reporting::Message| {
+                let diag = message.to_diagnostic(file_id);
+                driver.emit_diagnostic(diag);
+            };
+
+            let module = pion_core::elab::elab_module(&scope, &module, &mut on_message);
+
+            let mut local_names = Default::default();
+            let meta_sources = Default::default();
+            let mut distill_ctx =
+                pion_core::distill::DistillCtx::new(&scope, &mut local_names, &meta_sources);
+            let module = distill_ctx.module(&module);
+            driver.emit_module(&scope, &module);
         }
         Opts::Eval { file } => {
             let contents = unwrap_or_exit(read_file(&file));

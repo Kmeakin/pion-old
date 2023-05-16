@@ -1,0 +1,7 @@
+exit status: 0
+stdout:
+def foo : false = Bool;
+
+def bar : true = Bool;
+
+stderr:

@@ -1,3 +1,4 @@
+use pion_common::slice_vec::SliceVec;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::{self as surface, Symbol};
 use scoped_arena::Scope;
@@ -6,7 +7,7 @@ use self::unify::{PartialRenaming, UnifyCtx};
 use crate::distill::DistillCtx;
 use crate::env::{EnvLen, Index, Level, SharedEnv, UniqueEnv};
 use crate::reporting::Message;
-use crate::semantics::{ElimEnv, EvalEnv, QuoteEnv};
+use crate::semantics::{ElimEnv, EvalEnv, QuoteEnv, ZonkEnv};
 use crate::syntax::*;
 
 mod expr;
@@ -42,8 +43,8 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         let (expr, r#type) = self.synth(&expr);
         let r#type = self.quote_env().quote(&r#type);
 
-        let expr = self.eval_env().zonk(&expr);
-        let r#type = self.eval_env().zonk(&r#type);
+        let expr = self.zonk_env(self.scope).zonk(&expr);
+        let r#type = self.zonk_env(self.scope).zonk(&r#type);
 
         self.report_unsolved_metas();
         (expr, r#type)
@@ -86,8 +87,15 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         elim_env.eval_env(&mut self.local_env.values)
     }
 
-    pub fn quote_env(&self) -> QuoteEnv<'arena, '_> {
+    pub fn quote_env(&self) -> QuoteEnv<'arena, 'arena, '_> {
         QuoteEnv::new(self.scope, self.elim_env(), self.local_env.values.len())
+    }
+
+    pub fn zonk_env<'out_arena>(
+        &mut self,
+        scope: &'out_arena Scope<'out_arena>,
+    ) -> ZonkEnv<'out_arena, 'arena, '_> {
+        ZonkEnv::new(scope, self.eval_env())
     }
 
     pub fn unifiy_ctx(&mut self) -> UnifyCtx<'arena, '_> {
@@ -294,4 +302,53 @@ pub enum MetaSource {
     ImplicitArg(ByteRange, Option<Symbol>),
 
     MatchType(ByteRange),
+}
+
+pub fn elab_module<'arena>(
+    module_scope: &'arena Scope<'arena>,
+    module: &surface::Module<ByteRange>,
+    on_message: &'_ mut dyn FnMut(Message),
+) -> Module<'arena> {
+    let mut defs = SliceVec::new(
+        module_scope,
+        module
+            .items
+            .iter()
+            .filter(|item| matches!(item, surface::Item::Def(_)))
+            .count(),
+    );
+
+    for item in module.items {
+        let item_scope = Scope::new();
+        let mut elab_ctx = ElabCtx::new(&item_scope, on_message);
+
+        match item {
+            surface::Item::Def(def) => {
+                let (r#type, expr) = match def.r#type {
+                    Some(r#type) => {
+                        let r#type = elab_ctx.check(&r#type, &Type::TYPE);
+                        let type_value = elab_ctx.eval_env().eval(&r#type);
+                        let expr = elab_ctx.check(&def.expr, &type_value);
+
+                        (expr, r#type)
+                    }
+                    None => {
+                        let (expr, type_value) = elab_ctx.synth(&def.expr);
+                        let r#type = elab_ctx.quote_env().quote(&type_value);
+
+                        (expr, r#type)
+                    }
+                };
+
+                let r#type = elab_ctx.zonk_env(module_scope).zonk(&r#type);
+                let expr = elab_ctx.zonk_env(module_scope).zonk(&expr);
+                let def = Def::new(def.name, r#type, expr);
+                defs.push(def);
+            }
+        }
+
+        elab_ctx.report_unsolved_metas();
+    }
+
+    Module { defs: defs.into() }
 }
