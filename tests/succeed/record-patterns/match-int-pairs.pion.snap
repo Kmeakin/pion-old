@@ -10,8 +10,7 @@ let f1 : Int -> Int -> Int =
             b,
             1 => let c : Int = a._1;
             c,
-            _ => let c : Int = a._1;
-            c,
+            c => c,
         },
         _ => match a._1 {
             0 => let b : Int = a._0;
@@ -31,8 +30,7 @@ let f2 : Int -> Int -> Int =
             b,
             1 => let c : Int = p._1;
             c,
-            _ => let c : Int = p._1;
-            c,
+            c => c,
         },
         _ => match p._1 {
             0 => let b : Int = p._0;

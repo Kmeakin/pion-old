@@ -77,11 +77,10 @@ pub fn compile_match<'arena>(
                         ctx.local_env.pop();
 
                         match body {
-                            #[cfg(FALSE)]
                             Expr::Let((LetDef { name, expr, .. }, body))
                                 if expr == &scrut_expr.shift(ctx.scope, shift_amount) =>
                             {
-                                Some((*name, body))
+                                Some((*name, *body))
                             }
                             _ => Some((None, body)),
                         }

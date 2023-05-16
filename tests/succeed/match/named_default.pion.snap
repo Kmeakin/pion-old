@@ -2,8 +2,7 @@ exit status: 0
 stdout:
 fun (x : Int) => match x {
     0 => 1,
-    _ => let otherwise : Int = x;
-    otherwise,
+    otherwise => otherwise,
 } : Int -> Int
 
 stderr:
