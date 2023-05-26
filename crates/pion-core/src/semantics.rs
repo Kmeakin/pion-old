@@ -1,25 +1,25 @@
+use bumpalo::Bump;
 use either::*;
 use pion_common::slice_vec::SliceVec;
 use pion_surface::syntax::{Plicity, Symbol};
-use scoped_arena::Scope;
 
 use crate::env::{EnvLen, Index, Level, SharedEnv, SliceEnv};
 use crate::syntax::*;
 
 pub struct EvalEnv<'arena, 'env> {
-    scope: &'arena Scope<'arena>,
+    arena: &'arena Bump,
     elim_env: ElimEnv<'arena, 'env>,
     local_values: &'env mut SharedEnv<Value<'arena>>,
 }
 
 impl<'arena, 'env> EvalEnv<'arena, 'env> {
     pub fn new(
-        scope: &'arena Scope<'arena>,
+        arena: &'arena Bump,
         elim_env: ElimEnv<'arena, 'env>,
         local_values: &'env mut SharedEnv<Value<'arena>>,
     ) -> Self {
         Self {
-            scope,
+            arena,
             elim_env,
             local_values,
         }
@@ -57,12 +57,12 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
             Expr::FunType(plicity, name, (domain, codomain)) => {
                 let domain_value = self.eval(domain);
                 let codomain = Closure::new(self.local_values.clone(), codomain);
-                Value::FunType(*plicity, *name, self.scope.to_scope(domain_value), codomain)
+                Value::FunType(*plicity, *name, self.arena.alloc(domain_value), codomain)
             }
             Expr::FunLit(plicity, name, (domain, body)) => {
                 let type_value = self.eval(domain);
                 let body = Closure::new(self.local_values.clone(), body);
-                Value::FunLit(*plicity, *name, self.scope.to_scope(type_value), body)
+                Value::FunLit(*plicity, *name, self.arena.alloc(type_value), body)
             }
             Expr::FunApp(plicity, (fun, arg)) => {
                 let fun_value = self.eval(fun);
@@ -74,9 +74,9 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
                 Value::RecordType(labels, telescope)
             }
             Expr::RecordLit(labels, exprs) => {
-                let scope = self.scope;
+                let arena = self.arena;
                 let exprs = exprs.iter().map(|expr| self.eval(expr));
-                Value::RecordLit(labels, scope.to_scope_from_iter(exprs))
+                Value::RecordLit(labels, arena.alloc_slice_fill_iter(exprs))
             }
             Expr::RecordProj(head, label) => {
                 let head = self.eval(head);
@@ -109,16 +109,13 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
 
 #[derive(Clone, Copy)]
 pub struct ElimEnv<'arena, 'env> {
-    scope: &'arena Scope<'arena>,
+    arena: &'arena Bump,
     meta_values: &'env SliceEnv<Option<Value<'arena>>>,
 }
 
 impl<'arena, 'env> ElimEnv<'arena, 'env> {
-    pub fn new(
-        scope: &'arena Scope<'arena>,
-        meta_values: &'env SliceEnv<Option<Value<'arena>>>,
-    ) -> Self {
-        Self { scope, meta_values }
+    pub fn new(arena: &'arena Bump, meta_values: &'env SliceEnv<Option<Value<'arena>>>) -> Self {
+        Self { arena, meta_values }
     }
 
     fn get_meta<'this: 'env>(&'this self, var: Level) -> &'env Option<Value<'arena>> {
@@ -133,7 +130,7 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
         &self,
         local_values: &'env mut SharedEnv<Value<'arena>>,
     ) -> EvalEnv<'arena, 'env> {
-        EvalEnv::new(self.scope, *self, local_values)
+        EvalEnv::new(self.arena, *self, local_values)
     }
 
     /// Bring a value up-to-date with any new unification solutions that
@@ -267,25 +264,25 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
 /// This environment keeps track of the length of the local environment,
 /// and the values of metavariables, allowing for quotation.
 pub struct QuoteEnv<'out_arena, 'arena, 'env> {
-    scope: &'out_arena Scope<'out_arena>,
+    arena: &'out_arena Bump,
     elim_env: ElimEnv<'arena, 'env>,
     local_env: EnvLen,
 }
 
 impl<'out_arena, 'arena, 'env> QuoteEnv<'out_arena, 'arena, 'env> {
     pub fn new(
-        scope: &'out_arena Scope<'out_arena>,
+        arena: &'out_arena Bump,
         elim_env: ElimEnv<'arena, 'env>,
         local_env: EnvLen,
     ) -> Self {
         Self {
-            scope,
+            arena,
             elim_env,
             local_env,
         }
     }
 
-    fn expr_builder(&self) -> ExprBuilder<'out_arena> { ExprBuilder::new(self.scope) }
+    fn expr_builder(&self) -> ExprBuilder<'out_arena> { ExprBuilder::new(self.arena) }
 
     /// Quote a [value][Value] back into a [expr][Expr].
     pub fn quote(&mut self, value: &Value<'arena>) -> Expr<'out_arena> {
@@ -315,8 +312,8 @@ impl<'out_arena, 'arena, 'env> QuoteEnv<'out_arena, 'arena, 'env> {
                             }
                         };
                         Expr::Match(
-                            self.scope.to_scope((head, default)),
-                            self.scope.to_scope_from_iter(pattern_cases),
+                            self.arena.alloc((head, default)),
+                            self.arena.alloc_slice_fill_iter(pattern_cases),
                         )
                     }
                 })
@@ -333,14 +330,17 @@ impl<'out_arena, 'arena, 'env> QuoteEnv<'out_arena, 'arena, 'env> {
             }
             Value::RecordType(labels, telescope) => {
                 let types = self.quote_telescope(telescope);
-                Expr::RecordType(self.scope.to_scope_from_iter(labels.iter().copied()), types)
+                Expr::RecordType(
+                    self.arena.alloc_slice_fill_iter(labels.iter().copied()),
+                    types,
+                )
             }
             Value::RecordLit(labels, values) => {
-                let scope = self.scope;
+                let arena = self.arena;
                 let values = values.iter().map(|value| self.quote(value));
                 Expr::RecordLit(
-                    scope.to_scope_from_iter(labels.iter().copied()),
-                    scope.to_scope_from_iter(values),
+                    arena.alloc_slice_fill_iter(labels.iter().copied()),
+                    arena.alloc_slice_fill_iter(values),
                 )
             }
         }
@@ -379,7 +379,7 @@ impl<'out_arena, 'arena, 'env> QuoteEnv<'out_arena, 'arena, 'env> {
     fn quote_telescope(&mut self, telescope: Telescope<'arena>) -> &'out_arena [Expr<'out_arena>] {
         let initial_local_len = self.local_env;
         let mut telescope = telescope;
-        let mut exprs = SliceVec::new(self.scope, telescope.len());
+        let mut exprs = SliceVec::new(self.arena, telescope.len());
 
         while let Some((value, cont)) = self.elim_env.split_telescope(telescope) {
             let var = Value::local(self.local_env.to_level());
@@ -397,20 +397,20 @@ impl<'out_arena, 'arena, 'env> QuoteEnv<'out_arena, 'arena, 'env> {
 }
 
 pub struct ZonkEnv<'out_arena, 'arena, 'env> {
-    scope: &'out_arena Scope<'out_arena>,
+    arena: &'out_arena Bump,
     eval_env: EvalEnv<'arena, 'env>,
 }
 
 impl<'out_arena, 'arena, 'env> ZonkEnv<'out_arena, 'arena, 'env> {
-    pub fn new(scope: &'out_arena Scope<'out_arena>, eval_env: EvalEnv<'arena, 'env>) -> Self {
-        Self { scope, eval_env }
+    pub fn new(arena: &'out_arena Bump, eval_env: EvalEnv<'arena, 'env>) -> Self {
+        Self { arena, eval_env }
     }
 
-    fn expr_builder(&self) -> ExprBuilder<'out_arena> { ExprBuilder::new(self.scope) }
+    fn expr_builder(&self) -> ExprBuilder<'out_arena> { ExprBuilder::new(self.arena) }
 
     fn quote_env(&self) -> QuoteEnv<'out_arena, 'arena, 'env> {
         QuoteEnv::new(
-            self.scope,
+            self.arena,
             self.eval_env.elim_env,
             self.eval_env.local_values.len(),
         )
@@ -424,9 +424,10 @@ impl<'out_arena, 'arena, 'env> ZonkEnv<'out_arena, 'arena, 'env> {
             Expr::Prim(prim) => Expr::Prim(*prim),
             Expr::Local(var) => Expr::Local(*var),
             Expr::InsertedMeta(var, infos) => match self.eval_env.elim_env.get_meta(*var) {
-                None => {
-                    Expr::InsertedMeta(*var, self.scope.to_scope_from_iter(infos.iter().copied()))
-                }
+                None => Expr::InsertedMeta(
+                    *var,
+                    self.arena.alloc_slice_fill_iter(infos.iter().copied()),
+                ),
                 Some(value) => {
                     let value = self.eval_env.apply_binder_infos(value.clone(), infos);
                     self.quote_env().quote(&value)
@@ -461,19 +462,22 @@ impl<'out_arena, 'arena, 'env> ZonkEnv<'out_arena, 'arena, 'env> {
             }
             Expr::RecordType(labels, types) => {
                 let len = self.eval_env.local_values.len();
-                let types = (self.scope).to_scope_from_iter(types.iter().map(|r#type| {
+                let types = (self.arena).alloc_slice_fill_iter(types.iter().map(|r#type| {
                     let r#type = self.zonk(r#type);
                     let var = Value::local(self.eval_env.local_values.len().to_level());
                     self.eval_env.local_values.push(var);
                     r#type
                 }));
                 self.eval_env.local_values.truncate(len);
-                Expr::RecordType(self.scope.to_scope_from_iter(labels.iter().copied()), types)
+                Expr::RecordType(
+                    self.arena.alloc_slice_fill_iter(labels.iter().copied()),
+                    types,
+                )
             }
             Expr::RecordLit(labels, exprs) => Expr::RecordLit(
-                self.scope.to_scope_from_iter(labels.iter().copied()),
-                self.scope
-                    .to_scope_from_iter(exprs.iter().map(|expr| self.zonk(expr))),
+                self.arena.alloc_slice_fill_iter(labels.iter().copied()),
+                self.arena
+                    .alloc_slice_fill_iter(exprs.iter().map(|expr| self.zonk(expr))),
             ),
         }
     }
@@ -500,7 +504,7 @@ impl<'out_arena, 'arena, 'env> ZonkEnv<'out_arena, 'arena, 'env> {
             Expr::InsertedMeta(var, infos) => match self.eval_env.elim_env.get_meta(*var) {
                 None => Left(Expr::InsertedMeta(
                     *var,
-                    self.scope.to_scope_from_iter(infos.iter().copied()),
+                    self.arena.alloc_slice_fill_iter(infos.iter().copied()),
                 )),
                 Some(value) => Right(self.eval_env.apply_binder_infos(value.clone(), infos)),
             },
@@ -524,11 +528,11 @@ impl<'out_arena, 'arena, 'env> ZonkEnv<'out_arena, 'arena, 'env> {
             },
             Expr::Match((scrut, default), cases) => match self.zonk_meta_var_spines(scrut) {
                 Left(scrut) => {
-                    let cases = self.scope.to_scope_from_iter(
+                    let cases = self.arena.alloc_slice_fill_iter(
                         cases.iter().map(|(lit, expr)| (*lit, self.zonk(expr))),
                     );
                     let default = default.map(|(name, expr)| (name, self.zonk_with_local(&expr)));
-                    Left(Expr::Match(self.scope.to_scope((scrut, default)), cases))
+                    Left(Expr::Match(self.arena.alloc((scrut, default)), cases))
                 }
                 Right(scrut) => {
                     let cases = Cases::new(self.eval_env.local_values.clone(), cases, default);

@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-scoped-arena = "0.4.1"
+bumpalo = "3.13.0"

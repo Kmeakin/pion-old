@@ -20,7 +20,7 @@ pub fn compile_match<'arena>(
     // Base case 2:
     // If the first row is all wildcards, matching always suceeds.
     if matrix.row(0).all_wildcards() {
-        let scope = ctx.scope;
+        let arena = ctx.arena;
         let index = matrix.row_index(0);
         let Body { expr: body, defs } = &bodies[index];
 
@@ -28,14 +28,14 @@ pub fn compile_match<'arena>(
         let defs = defs.iter().map(|(def_name, scrut)| {
             let def_name = *def_name;
             let def_type = ctx.quote_env().quote(&scrut.r#type);
-            let def_expr = scrut.expr.shift(ctx.scope, shift_amount);
+            let def_expr = scrut.expr.shift(arena, shift_amount);
             let def_value = ctx.eval_env().eval(&def_expr);
             ctx.local_env
                 .push_def(def_name, scrut.r#type.clone(), def_value);
             shift_amount.push();
             (LetDef::new(def_name, def_type, def_expr), Expr::Error)
         });
-        let defs = scope.to_scope_from_iter(defs);
+        let defs = arena.alloc_slice_fill_iter(defs);
         ctx.local_env.truncate(initial_len);
 
         return defs.iter_mut().rev().fold(*body, |body, pair| {
@@ -54,10 +54,10 @@ pub fn compile_match<'arena>(
     for (pat, scrut) in matrix.column(0) {
         match pat {
             Pat::Lit(..) => {
-                let scrut_expr = scrut.expr.shift(ctx.scope, shift_amount);
+                let scrut_expr = scrut.expr.shift(ctx.arena, shift_amount);
                 let ctors = matrix.column_constructors(0);
 
-                let mut branches = SliceVec::new(ctx.scope, ctors.len());
+                let mut branches = SliceVec::new(ctx.arena, ctors.len());
                 for ctor in &ctors {
                     let lit = ctor.as_lit().unwrap();
                     let mut matrix = matrix.specialize(ctx, ctor);
@@ -78,7 +78,7 @@ pub fn compile_match<'arena>(
 
                         match body {
                             Expr::Let((LetDef { name, expr, .. }, body))
-                                if expr == &scrut_expr.shift(ctx.scope, shift_amount) =>
+                                if expr == &scrut_expr.shift(ctx.arena, shift_amount) =>
                             {
                                 Some((*name, *body))
                             }
@@ -88,7 +88,7 @@ pub fn compile_match<'arena>(
                 };
 
                 return Expr::Match(
-                    ctx.scope.to_scope((scrut_expr, default_branch)),
+                    ctx.arena.alloc((scrut_expr, default_branch)),
                     branches.into(),
                 );
             }

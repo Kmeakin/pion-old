@@ -1,7 +1,7 @@
+use bumpalo::Bump;
 use pion_common::slice_vec::SliceVec;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::{self as surface, Symbol};
-use scoped_arena::Scope;
 
 use self::unify::{PartialRenaming, UnifyCtx};
 use crate::distill::DistillCtx;
@@ -17,8 +17,8 @@ pub mod unify;
 
 /// Elaboration context.
 pub struct ElabCtx<'arena, 'message> {
-    scope: &'arena Scope<'arena>,
-    temp_scope: Scope<'arena>,
+    arena: &'arena Bump,
+    temp_arena: Bump,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
     renaming: PartialRenaming,
@@ -26,10 +26,10 @@ pub struct ElabCtx<'arena, 'message> {
 }
 
 impl<'arena, 'message> ElabCtx<'arena, 'message> {
-    pub fn new(scope: &'arena Scope<'arena>, on_message: &'message mut dyn FnMut(Message)) -> Self {
+    pub fn new(arena: &'arena Bump, on_message: &'message mut dyn FnMut(Message)) -> Self {
         Self {
-            scope,
-            temp_scope: Scope::new(),
+            arena,
+            temp_arena: Bump::new(),
             local_env: LocalEnv::default(),
             meta_env: MetaEnv::default(),
             renaming: PartialRenaming::default(),
@@ -37,14 +37,14 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         }
     }
 
-    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.scope) }
+    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.arena) }
 
     pub fn elab_expr(&mut self, expr: surface::Expr<'_>) -> (Expr<'arena>, Expr<'arena>) {
         let (expr, r#type) = self.synth(&expr);
         let r#type = self.quote_env().quote(&r#type);
 
-        let expr = self.zonk_env(self.scope).zonk(&expr);
-        let r#type = self.zonk_env(self.scope).zonk(&r#type);
+        let expr = self.zonk_env(self.arena).zonk(&expr);
+        let r#type = self.zonk_env(self.arena).zonk(&r#type);
 
         self.report_unsolved_metas();
         (expr, r#type)
@@ -72,35 +72,35 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
 
     pub fn distill_ctx(&mut self) -> DistillCtx<'arena, '_> {
         DistillCtx::new(
-            self.scope,
+            self.arena,
             &mut self.local_env.names,
             &self.meta_env.sources,
         )
     }
 
     pub fn elim_env(&self) -> ElimEnv<'arena, '_> {
-        ElimEnv::new(self.scope, &self.meta_env.values)
+        ElimEnv::new(self.arena, &self.meta_env.values)
     }
 
     pub fn eval_env(&mut self) -> EvalEnv<'arena, '_> {
-        let elim_env = ElimEnv::new(self.scope, &self.meta_env.values);
+        let elim_env = ElimEnv::new(self.arena, &self.meta_env.values);
         elim_env.eval_env(&mut self.local_env.values)
     }
 
     pub fn quote_env(&self) -> QuoteEnv<'arena, 'arena, '_> {
-        QuoteEnv::new(self.scope, self.elim_env(), self.local_env.values.len())
+        QuoteEnv::new(self.arena, self.elim_env(), self.local_env.values.len())
     }
 
     pub fn zonk_env<'out_arena>(
         &mut self,
-        scope: &'out_arena Scope<'out_arena>,
+        arena: &'out_arena Bump,
     ) -> ZonkEnv<'out_arena, 'arena, '_> {
-        ZonkEnv::new(scope, self.eval_env())
+        ZonkEnv::new(arena, self.eval_env())
     }
 
     pub fn unifiy_ctx(&mut self) -> UnifyCtx<'arena, '_> {
         UnifyCtx::new(
-            self.scope,
+            self.arena,
             &mut self.renaming,
             self.local_env.len(),
             &mut self.meta_env.values,
@@ -113,7 +113,7 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
         let level = self.meta_env.push(source, r#type);
         Expr::InsertedMeta(
             level,
-            (self.scope).to_scope_from_iter(self.local_env.infos.iter().copied()),
+            self.arena.alloc_slice_copy(self.local_env.infos.as_slice()),
         )
     }
 
@@ -123,22 +123,21 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
     }
 
     fn pretty_value(&mut self, value: &Value) -> String {
-        let mut proxy = self.temp_scope.proxy();
-        let temp_scope = proxy.scope();
-
-        let elim_env = ElimEnv::new(self.scope, &self.meta_env.values);
-        let mut quote_env = QuoteEnv::new(&temp_scope, elim_env, self.local_env.values.len());
+        let elim_env = ElimEnv::new(&self.temp_arena, &self.meta_env.values);
+        let mut quote_env = QuoteEnv::new(&self.temp_arena, elim_env, self.local_env.values.len());
         let mut distill_ctx = DistillCtx::new(
-            &temp_scope,
+            &self.temp_arena,
             &mut self.local_env.names,
             &self.meta_env.sources,
         );
 
         let expr = quote_env.quote(value);
         let surface_expr = distill_ctx.expr(&expr);
-        let ctx = pion_surface::pretty::PrettyCtx::new(&temp_scope);
+        let ctx = pion_surface::pretty::PrettyCtx::new(&self.temp_arena);
         let doc = ctx.expr(&surface_expr);
-        doc.pretty(usize::MAX).to_string()
+        let ret = doc.pretty(usize::MAX).to_string();
+        self.temp_arena.reset();
+        ret
     }
 
     /// Run `f`, potentially modifying the local environment, then restore the
@@ -305,12 +304,12 @@ pub enum MetaSource {
 }
 
 pub fn elab_module<'arena>(
-    module_scope: &'arena Scope<'arena>,
+    module_arena: &'arena Bump,
     module: &surface::Module<ByteRange>,
     on_message: &'_ mut dyn FnMut(Message),
 ) -> Module<'arena> {
     let mut defs = SliceVec::new(
-        module_scope,
+        module_arena,
         module
             .items
             .iter()
@@ -319,8 +318,8 @@ pub fn elab_module<'arena>(
     );
 
     for item in module.items {
-        let item_scope = Scope::new();
-        let mut elab_ctx = ElabCtx::new(&item_scope, on_message);
+        let item_arena = Bump::new();
+        let mut elab_ctx = ElabCtx::new(&item_arena, on_message);
 
         match item {
             surface::Item::Def(def) => {
@@ -340,8 +339,8 @@ pub fn elab_module<'arena>(
                     }
                 };
 
-                let r#type = elab_ctx.zonk_env(module_scope).zonk(&r#type);
-                let expr = elab_ctx.zonk_env(module_scope).zonk(&expr);
+                let r#type = elab_ctx.zonk_env(module_arena).zonk(&r#type);
+                let expr = elab_ctx.zonk_env(module_arena).zonk(&expr);
                 let def = Def::new(def.name, r#type, expr);
                 defs.push(def);
             }

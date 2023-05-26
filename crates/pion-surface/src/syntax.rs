@@ -1,15 +1,15 @@
 use core::fmt;
 
+use bumpalo::Bump;
 pub use pion_source::input::InputString;
 use pion_source::location::{BytePos, ByteRange};
-use scoped_arena::Scope;
 
 use crate::reporting::{Message, TokenError};
 use crate::tokens::{self, Token};
 
 pub type Symbol = ustr::Ustr;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Module<'arena, Extra = ByteRange> {
     pub items: &'arena [Item<'arena, Extra>],
 }
@@ -20,14 +20,14 @@ impl<'arena, Extra> Module<'arena, Extra> {
 
 impl<'arena, 'message> Module<'arena, ByteRange> {
     pub fn parse(
-        scope: &'arena Scope<'arena>,
+        arena: &'arena Bump,
         on_message: &'message mut dyn FnMut(Message),
         input: &InputString,
     ) -> Self {
         let tokens = tokens::tokens(input);
         match crate::grammar::ModuleParser::new().parse(
-            Builder::new(scope),
-            scope,
+            Builder::new(arena),
+            arena,
             on_message,
             tokens,
         ) {
@@ -41,12 +41,12 @@ impl<'arena, 'message> Module<'arena, ByteRange> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Item<'arena, Extra = ByteRange> {
     Def(Def<'arena, Extra>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Def<'arena, Extra = ByteRange> {
     pub extra: Extra,
     pub name: Symbol,
@@ -153,14 +153,14 @@ impl<'arena, Extra> Expr<'arena, Extra> {
 
 impl<'arena, 'message> Expr<'arena, ByteRange> {
     pub fn parse(
-        scope: &'arena Scope<'arena>,
+        arena: &'arena Bump,
         on_message: &'message mut dyn FnMut(Message),
         input: &InputString,
     ) -> Self {
         let tokens = tokens::tokens(input);
         match crate::grammar::ExprParser::new().parse(
-            Builder::new(scope),
-            scope,
+            Builder::new(arena),
+            arena,
             on_message,
             tokens,
         ) {
@@ -342,11 +342,11 @@ impl Message {
 
 #[derive(Copy, Clone)]
 pub struct Builder<'arena> {
-    scope: &'arena Scope<'arena>,
+    arena: &'arena Bump,
 }
 
 impl<'arena> Builder<'arena> {
-    pub fn new(scope: &'arena Scope<'arena>) -> Self { Self { scope } }
+    pub fn new(arena: &'arena Bump) -> Self { Self { arena } }
 
     pub fn def<Extra>(
         &self,
@@ -368,7 +368,7 @@ impl<'arena> Builder<'arena> {
         range: impl Into<Extra>,
         expr: Expr<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
-        Expr::Paren(range.into(), self.scope.to_scope(expr))
+        Expr::Paren(range.into(), self.arena.alloc(expr))
     }
 
     pub fn ann<Extra>(
@@ -377,7 +377,7 @@ impl<'arena> Builder<'arena> {
         expr: Expr<'arena, Extra>,
         r#type: Expr<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
-        Expr::Ann(range.into(), self.scope.to_scope((expr, r#type)))
+        Expr::Ann(range.into(), self.arena.alloc((expr, r#type)))
     }
 
     pub fn r#let<Extra>(
@@ -386,7 +386,7 @@ impl<'arena> Builder<'arena> {
         def: LetDef<'arena, Extra>,
         body: Expr<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
-        Expr::Let(range.into(), self.scope.to_scope((def, body)))
+        Expr::Let(range.into(), self.arena.alloc((def, body)))
     }
 
     pub fn arrow<Extra>(
@@ -396,11 +396,7 @@ impl<'arena> Builder<'arena> {
         domain: Expr<'arena, Extra>,
         codomain: Expr<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
-        Expr::Arrow(
-            range.into(),
-            plicity,
-            self.scope.to_scope((domain, codomain)),
-        )
+        Expr::Arrow(range.into(), plicity, self.arena.alloc((domain, codomain)))
     }
 
     pub fn fun_type<Extra>(
@@ -409,7 +405,7 @@ impl<'arena> Builder<'arena> {
         params: &'arena [Param<'arena, Extra>],
         codomain: Expr<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
-        Expr::FunType(range.into(), params, self.scope.to_scope(codomain))
+        Expr::FunType(range.into(), params, self.arena.alloc(codomain))
     }
 
     pub fn fun_lit<Extra>(
@@ -418,7 +414,7 @@ impl<'arena> Builder<'arena> {
         params: &'arena [Param<'arena, Extra>],
         body: Expr<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
-        Expr::FunLit(range.into(), params, self.scope.to_scope(body))
+        Expr::FunLit(range.into(), params, self.arena.alloc(body))
     }
 
     pub fn fun_app<Extra>(
@@ -427,7 +423,7 @@ impl<'arena> Builder<'arena> {
         fun: Expr<'arena, Extra>,
         args: &'arena [Arg<'arena, Extra>],
     ) -> Expr<'arena, Extra> {
-        Expr::FunApp(range.into(), self.scope.to_scope(fun), args)
+        Expr::FunApp(range.into(), self.arena.alloc(fun), args)
     }
 
     pub fn record_proj<Extra>(
@@ -436,7 +432,7 @@ impl<'arena> Builder<'arena> {
         head: Expr<'arena, Extra>,
         labels: &'arena [(Extra, Symbol)],
     ) -> Expr<'arena, Extra> {
-        Expr::RecordProj(range.into(), self.scope.to_scope(head), labels)
+        Expr::RecordProj(range.into(), self.arena.alloc(head), labels)
     }
 
     pub fn if_then_else<Extra>(
@@ -446,7 +442,7 @@ impl<'arena> Builder<'arena> {
         then: Expr<'arena, Extra>,
         r#else: Expr<'arena, Extra>,
     ) -> Expr<'arena, Extra> {
-        Expr::If(range.into(), self.scope.to_scope((cond, then, r#else)))
+        Expr::If(range.into(), self.arena.alloc((cond, then, r#else)))
     }
 }
 

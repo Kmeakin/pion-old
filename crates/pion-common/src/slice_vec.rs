@@ -11,7 +11,7 @@ use std::ops::Deref;
 
 /// A helpful type for allocating elements to a slice up to a maximum length.
 /// This can be helpful if we have initialization code that might be difficult
-/// to implement using [`scoped_arena::Scope::to_scope_from_iter`], for example:
+/// to implement using [`bumpalo::Bump::talloc_slice_fill_iter`], for example:
 ///
 /// - when pushing to multiple slices at once
 /// - when element initialization code has the possibility of failure
@@ -23,23 +23,20 @@ pub struct SliceVec<'arena, Elem> {
 }
 
 impl<'arena, Elem> SliceVec<'arena, Elem> {
-    /// Allocates a new slice builder to the scope.
+    /// Allocates a new slice builder to the arena.
     ///
     /// # Panics
     ///
     /// If the type has drop-glue to be executed.
-    pub fn new(
-        scope: &'arena scoped_arena::Scope<'arena>,
-        capacity: usize,
-    ) -> SliceVec<'arena, Elem> {
+    pub fn new(arena: &'arena bumpalo::Bump, capacity: usize) -> SliceVec<'arena, Elem> {
         // NOTE: Ensure that that the element type does not have any drop glue.
         //       This would be problematic as we have no way of registering the
-        //       drop glue of `Elem` with `scoped_arena::Scope`.
+        //       drop glue of `Elem` with `bumpalo::Bump`.
         assert!(!std::mem::needs_drop::<Elem>());
 
         SliceVec {
             len: 0,
-            elems: scope.to_scope_many_with(capacity, MaybeUninit::uninit),
+            elems: arena.alloc_slice_fill_with(capacity, |_| MaybeUninit::uninit()),
         }
     }
 

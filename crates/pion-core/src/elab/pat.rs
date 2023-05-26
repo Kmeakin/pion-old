@@ -69,9 +69,9 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
             }
             surface::Pat::RecordLit(_, fields) => {
                 let mut label_ranges = Vec::with_capacity(fields.len());
-                let mut labels = SliceVec::new(self.scope, fields.len());
-                let mut pats = SliceVec::new(self.scope, fields.len());
-                let mut types = SliceVec::new(self.scope, fields.len());
+                let mut labels = SliceVec::new(self.arena, fields.len());
+                let mut pats = SliceVec::new(self.arena, fields.len());
+                let mut types = SliceVec::new(self.arena, fields.len());
 
                 let initial_len = self.local_env.len();
                 for field in fields.iter() {
@@ -104,9 +104,9 @@ impl<'arena, 'message> ElabCtx<'arena, 'message> {
                 )
             }
             surface::Pat::TupleLit(_, elems) => {
-                let mut labels = SliceVec::new(self.scope, elems.len());
-                let mut pats = SliceVec::new(self.scope, elems.len());
-                let mut types = SliceVec::new(self.scope, elems.len());
+                let mut labels = SliceVec::new(self.arena, elems.len());
+                let mut pats = SliceVec::new(self.arena, elems.len());
+                let mut types = SliceVec::new(self.arena, elems.len());
 
                 let initial_len = self.local_env.len();
                 for (idx, pat) in elems.iter().enumerate() {

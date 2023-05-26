@@ -1,5 +1,6 @@
+use bumpalo::Bump;
+use pion_common::slice_vec::SliceVec;
 use pion_surface::syntax::{self as surface, Arg, ExprField, Plicity, Symbol, TypeField};
-use scoped_arena::Scope;
 
 use crate::elab::MetaSource;
 use crate::env::{EnvLen, Level, UniqueEnv};
@@ -18,25 +19,25 @@ enum Prec {
 
 /// Distillation context.
 pub struct DistillCtx<'arena, 'env> {
-    scope: &'arena Scope<'arena>,
+    arena: &'arena Bump,
     local_names: &'env mut UniqueEnv<Option<Symbol>>,
     meta_sources: &'env UniqueEnv<MetaSource>,
 }
 
 impl<'arena, 'env> DistillCtx<'arena, 'env> {
     pub fn new(
-        scope: &'arena Scope<'arena>,
+        arena: &'arena Bump,
         local_names: &'env mut UniqueEnv<Option<Symbol>>,
         meta_sources: &'env UniqueEnv<MetaSource>,
     ) -> Self {
         Self {
-            scope,
+            arena,
             local_names,
             meta_sources,
         }
     }
 
-    fn builder(&self) -> surface::Builder<'arena> { surface::Builder::new(self.scope) }
+    fn builder(&self) -> surface::Builder<'arena> { surface::Builder::new(self.arena) }
 
     fn local_len(&mut self) -> EnvLen { self.local_names.len() }
 
@@ -88,7 +89,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
     }
 
     pub fn module(&mut self, module: &Module<'_>) -> surface::Module<'arena, ()> {
-        let items = self.scope.to_scope_from_iter(
+        let items = self.arena.alloc_slice_fill_iter(
             (module.defs)
                 .iter()
                 .map(|def| surface::Item::Def(self.def(def))),
@@ -137,24 +138,33 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
             },
             Expr::InsertedMeta(var, spine) => {
                 let head = self.expr(&Expr::Meta(*var));
-                let args = self.scope.to_scope_from_iter(
-                    Level::iter()
-                        .zip(spine.iter())
-                        .filter_map(|(level, info)| match info {
-                            BinderInfo::Def => None,
-                            BinderInfo::Param => Some(level),
-                        })
-                        .map(|var| {
+                let num_params = spine
+                    .iter()
+                    .filter(|info| matches!(info, BinderInfo::Param))
+                    .count();
+
+                if num_params == 0 {
+                    return head;
+                }
+
+                let mut args = SliceVec::new(self.arena, num_params);
+
+                for (var, info) in Level::iter().zip(spine.iter()) {
+                    match info {
+                        BinderInfo::Def => {}
+                        BinderInfo::Param => {
                             let var = self.local_len().level_to_index(var).unwrap();
                             let expr = self.expr_prec(Prec::Top, &Expr::Local(var));
-                            Arg {
+                            let arg = Arg {
                                 extra: (),
                                 plicity: Plicity::Explicit,
                                 expr,
-                            }
-                        }),
-                );
-                self.paren(prec > Prec::App, builder.fun_app((), head, args))
+                            };
+                            args.push(arg);
+                        }
+                    }
+                }
+                self.paren(prec > Prec::App, builder.fun_app((), head, args.into()))
             }
             Expr::Lit(literal) => surface::Expr::Lit((), lit(*literal)),
             Expr::Prim(primitive) => prim(*primitive),
@@ -213,7 +223,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 if params.is_empty() {
                     self.paren(prec > Prec::Fun, body)
                 } else {
-                    let params = self.scope.to_scope_from_iter(params);
+                    let params = self.arena.alloc_slice_copy(&params);
                     self.paren(prec > Prec::Fun, builder.fun_type((), params, body))
                 }
             }
@@ -236,7 +246,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 let body = self.expr_prec(Prec::Let, body);
                 self.truncate_local(initial_len);
 
-                let params = self.scope.to_scope_from_iter(params);
+                let params = self.arena.alloc_slice_copy(&params);
                 self.paren(prec > Prec::Fun, builder.fun_lit((), params, body))
             }
             Expr::FunApp(..) => {
@@ -254,23 +264,23 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 }
 
                 let fun = self.expr_prec(Prec::Proj, fun);
-                let args = self.scope.to_scope_from_iter(args.into_iter().rev());
+                let args = self.arena.alloc_slice_fill_iter(args.into_iter().rev());
                 self.paren(prec > Prec::App, builder.fun_app((), fun, args))
             }
             Expr::RecordType(labels, types) if is_tuple_telescope(labels, types) => {
                 let initial_len = self.local_len();
-                let types = (self.scope).to_scope_from_iter(labels.iter().zip(types.iter()).map(
-                    |(label, r#type)| {
+                let types = (self.arena).alloc_slice_fill_iter(
+                    labels.iter().zip(types.iter()).map(|(label, r#type)| {
                         let expr = self.expr_prec(Prec::Top, r#type);
                         self.push_local(Some(*label));
                         expr
-                    },
-                ));
+                    }),
+                );
                 self.truncate_local(initial_len);
                 surface::Expr::TupleLit((), types)
             }
             Expr::RecordType(labels, types) => {
-                let scope = self.scope;
+                let arena = self.arena;
                 self.local_names.reserve(labels.len());
 
                 let initial_local_len = self.local_len();
@@ -282,17 +292,17 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                         r#type,
                     }
                 });
-                let fields = scope.to_scope_from_iter(fields);
+                let fields = arena.alloc_slice_fill_iter(fields);
                 self.truncate_local(initial_local_len);
                 surface::Expr::RecordType((), fields)
             }
             Expr::RecordLit(labels, exprs) if is_tuple_labels(labels) => {
-                let scope = self.scope;
+                let arena = self.arena;
                 let exprs = exprs.iter().map(|expr| self.expr(expr));
-                surface::Expr::TupleLit((), scope.to_scope_from_iter(exprs))
+                surface::Expr::TupleLit((), arena.alloc_slice_fill_iter(exprs))
             }
             Expr::RecordLit(labels, exprs) => {
-                let scope = self.scope;
+                let arena = self.arena;
                 let fields = labels
                     .iter()
                     .zip(exprs.iter())
@@ -300,7 +310,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                         label: ((), *label),
                         expr: self.expr_prec(Prec::Top, expr),
                     });
-                surface::Expr::RecordLit((), scope.to_scope_from_iter(fields))
+                surface::Expr::RecordLit((), arena.alloc_slice_fill_iter(fields))
             }
             Expr::RecordProj(..) => {
                 let mut labels = Vec::new();
@@ -312,11 +322,11 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                 }
 
                 let head = self.expr_prec(Prec::Atom, head);
-                let labels = self.scope.to_scope_from_iter(labels.into_iter().rev());
+                let labels = self.arena.alloc_slice_fill_iter(labels.into_iter().rev());
                 builder.record_proj((), head, labels)
             }
             Expr::Match((scrut, default), cases) => {
-                let scope = self.scope;
+                let arena = self.arena;
                 let scrut = self.expr_prec(Prec::Proj, scrut);
                 let default = default.map(|(name, expr)| {
                     let name = self.freshen_name(name, &expr);
@@ -331,8 +341,10 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
                     let expr = self.expr(expr);
                     surface::MatchCase { pat, expr }
                 });
-                let cases = scope.to_scope_from_iter(cases.chain(default));
-                surface::Expr::Match((), self.scope.to_scope(scrut), cases)
+                let len = cases.len() + usize::from(default.is_some());
+                let mut iter = cases.chain(default);
+                let cases = arena.alloc_slice_fill_with(len, |_| iter.next().unwrap());
+                surface::Expr::Match((), self.arena.alloc(scrut), cases)
             }
         }
     }

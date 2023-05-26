@@ -7,7 +7,7 @@ use crate::env::{Level, SliceEnv};
 /// Unification context.
 pub struct UnifyCtx<'arena, 'env> {
     /// Scoped arena for storing [renamed][Context::rename] exprs.
-    scope: &'arena Scope<'arena>,
+    arena: &'arena Bump,
     /// A renaming that is used when solving metavariables using pattern
     /// unification. We store it in the parent context, re-initialising it on
     /// each call to [`Context::solve`] in order to reuse previous allocations.
@@ -212,22 +212,22 @@ pub enum RenameError {
 
 impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     pub fn new(
-        scope: &'arena Scope<'arena>,
+        arena: &'arena Bump,
         renaming: &'env mut PartialRenaming,
         local_env: EnvLen,
         meta_values: &'env mut SliceEnv<Option<Value<'arena>>>,
     ) -> Self {
         Self {
-            scope,
+            arena,
             renaming,
             local_env,
             meta_values,
         }
     }
 
-    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.scope) }
+    fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.arena) }
 
-    fn elim_env(&self) -> ElimEnv<'arena, '_> { ElimEnv::new(self.scope, self.meta_values) }
+    fn elim_env(&self) -> ElimEnv<'arena, '_> { ElimEnv::new(self.arena, self.meta_values) }
 
     /// Unify two values, updating the solution environment if necessary.
     pub fn unify(
@@ -572,8 +572,8 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                             }
                         };
                         Ok(Expr::Match(
-                            self.scope.to_scope((head, default)),
-                            self.scope.to_scope_from_iter(pattern_cases),
+                            self.arena.alloc((head, default)),
+                            self.arena.alloc_slice_fill_iter(pattern_cases),
                         ))
                     }
                 })
@@ -593,7 +593,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
                 Ok(Expr::RecordType(labels, types))
             }
             Value::RecordLit(labels, values) => {
-                let mut exprs = SliceVec::new(self.scope, values.len());
+                let mut exprs = SliceVec::new(self.arena, values.len());
 
                 for value in values.iter() {
                     exprs.push(self.rename(meta_var, value)?);
@@ -628,7 +628,7 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
     ) -> Result<&'arena [Expr<'arena>], RenameError> {
         let initial_renaming_len = self.renaming.len();
         let mut telescope = telescope;
-        let mut exprs = SliceVec::new(self.scope, telescope.len());
+        let mut exprs = SliceVec::new(self.arena, telescope.len());
 
         while let Some((value, cont)) = self.elim_env().split_telescope(telescope) {
             match self.rename(meta_var, &value) {

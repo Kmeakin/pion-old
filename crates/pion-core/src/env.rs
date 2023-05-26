@@ -89,6 +89,8 @@ impl<T> Default for UniqueEnv<T> {
 }
 
 impl<T> UniqueEnv<T> {
+    pub fn as_slice(&self) -> &[T] { &self.entries }
+
     /// Clear the environment. This is useful for reusing environment
     /// allocations.
     pub fn clear(&mut self) { self.entries.clear() }

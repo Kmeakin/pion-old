@@ -1,9 +1,9 @@
 use std::ops::ControlFlow;
 
+use bumpalo::Bump;
 use internal_iterator::InternalIterator;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::{Plicity, Symbol};
-use scoped_arena::Scope;
 
 use crate::env::{EnvLen, Index, Level, SharedEnv};
 use crate::prim::Prim;
@@ -72,23 +72,18 @@ impl<'arena> Expr<'arena> {
     }
 
     #[must_use]
-    pub fn shift(&self, scope: &'arena Scope<'arena>, amount: EnvLen) -> Expr<'arena> {
-        self.shift_inner(scope, Index::new(), amount)
+    pub fn shift(&self, arena: &'arena Bump, amount: EnvLen) -> Expr<'arena> {
+        self.shift_inner(arena, Index::new(), amount)
     }
 
-    fn shift_inner(
-        &self,
-        scope: &'arena Scope<'arena>,
-        mut min: Index,
-        amount: EnvLen,
-    ) -> Expr<'arena> {
+    fn shift_inner(&self, arena: &'arena Bump, mut min: Index, amount: EnvLen) -> Expr<'arena> {
         // Skip traversing and rebuilding the term if it would make no change. Increases
         // sharing.
         if amount == EnvLen::new() {
             return *self;
         }
 
-        let builder = ExprBuilder::new(scope);
+        let builder = ExprBuilder::new(arena);
 
         match self {
             Expr::Local(var) if *var >= min => Expr::Local(*var + amount),
@@ -103,57 +98,57 @@ impl<'arena> Expr<'arena> {
             Expr::Let((def, body)) => builder.r#let(
                 LetDef {
                     name: def.name,
-                    r#type: def.r#type.shift_inner(scope, min, amount),
-                    expr: def.expr.shift_inner(scope, min, amount),
+                    r#type: def.r#type.shift_inner(arena, min, amount),
+                    expr: def.expr.shift_inner(arena, min, amount),
                 },
-                body.shift_inner(scope, min.next(), amount),
+                body.shift_inner(arena, min.next(), amount),
             ),
             Expr::FunType(plicity, name, (domain, body)) => builder.fun_type(
                 *plicity,
                 *name,
-                domain.shift_inner(scope, min, amount),
-                body.shift_inner(scope, min.next(), amount),
+                domain.shift_inner(arena, min, amount),
+                body.shift_inner(arena, min.next(), amount),
             ),
             Expr::FunLit(plicity, name, (domain, body)) => builder.fun_lit(
                 *plicity,
                 *name,
-                domain.shift_inner(scope, min, amount),
-                body.shift_inner(scope, min.next(), amount),
+                domain.shift_inner(arena, min, amount),
+                body.shift_inner(arena, min.next(), amount),
             ),
             Expr::FunApp(plicity, (fun, arg)) => builder.fun_app(
                 *plicity,
-                fun.shift_inner(scope, min, amount),
-                arg.shift_inner(scope, min, amount),
+                fun.shift_inner(arena, min, amount),
+                arg.shift_inner(arena, min, amount),
             ),
             Expr::RecordType(labels, types) => {
                 let types = types.iter().map(|expr| {
-                    let ret = expr.shift_inner(scope, min, amount);
+                    let ret = expr.shift_inner(arena, min, amount);
                     min = min.next();
                     ret
                 });
-                let types = scope.to_scope_from_iter(types);
+                let types = arena.alloc_slice_fill_iter(types);
                 Expr::RecordType(labels, types)
             }
             Expr::RecordLit(labels, exprs) => {
                 let exprs = exprs
                     .iter()
-                    .map(|expr| expr.shift_inner(scope, min, amount));
-                let exprs = scope.to_scope_from_iter(exprs);
+                    .map(|expr| expr.shift_inner(arena, min, amount));
+                let exprs = arena.alloc_slice_fill_iter(exprs);
                 Expr::RecordLit(labels, exprs)
             }
             Expr::RecordProj(expr, label) => {
-                builder.record_proj(expr.shift_inner(scope, min, amount), *label)
+                builder.record_proj(expr.shift_inner(arena, min, amount), *label)
             }
             Expr::Match((scrut, default), branches) => {
-                let scrut = scrut.shift_inner(scope, min, amount);
+                let scrut = scrut.shift_inner(arena, min, amount);
                 let default =
-                    default.map(|(name, expr)| (name, expr.shift_inner(scope, min.next(), amount)));
+                    default.map(|(name, expr)| (name, expr.shift_inner(arena, min.next(), amount)));
                 let branches = branches
                     .iter()
-                    .map(|(lit, expr)| (*lit, expr.shift_inner(scope, min, amount)));
+                    .map(|(lit, expr)| (*lit, expr.shift_inner(arena, min, amount)));
                 Expr::Match(
-                    scope.to_scope((scrut, default)),
-                    scope.to_scope_from_iter(branches),
+                    arena.alloc((scrut, default)),
+                    arena.alloc_slice_fill_iter(branches),
                 )
             }
         }
@@ -468,14 +463,14 @@ impl<'a, 'arena> Subexprs<'a, 'arena> {
 }
 
 pub struct ExprBuilder<'arena> {
-    scope: &'arena Scope<'arena>,
+    arena: &'arena Bump,
 }
 
 impl<'arena> ExprBuilder<'arena> {
-    pub fn new(scope: &'arena Scope<'arena>) -> Self { Self { scope } }
+    pub fn new(arena: &'arena Bump) -> Self { Self { arena } }
 
     pub fn r#let(&self, def: LetDef<'arena>, body: Expr<'arena>) -> Expr<'arena> {
-        Expr::Let(self.scope.to_scope((def, body)))
+        Expr::Let(self.arena.alloc((def, body)))
     }
 
     pub fn lets<I>(&self, defs: I, body: Expr<'arena>) -> Expr<'arena>
@@ -483,9 +478,9 @@ impl<'arena> ExprBuilder<'arena> {
         I: IntoIterator<Item = LetDef<'arena>>,
         I::IntoIter: DoubleEndedIterator,
     {
-        defs.into_iter().rev().fold(body, |body, def| {
-            Expr::Let(self.scope.to_scope((def, body)))
-        })
+        defs.into_iter()
+            .rev()
+            .fold(body, |body, def| Expr::Let(self.arena.alloc((def, body))))
     }
 
     pub fn fun_lit(
@@ -495,7 +490,7 @@ impl<'arena> ExprBuilder<'arena> {
         domain: Expr<'arena>,
         body: Expr<'arena>,
     ) -> Expr<'arena> {
-        Expr::FunLit(plicity, name, self.scope.to_scope((domain, body)))
+        Expr::FunLit(plicity, name, self.arena.alloc((domain, body)))
     }
 
     pub fn fun_type(
@@ -505,15 +500,15 @@ impl<'arena> ExprBuilder<'arena> {
         domain: Expr<'arena>,
         codomain: Expr<'arena>,
     ) -> Expr<'arena> {
-        Expr::FunType(plicity, name, self.scope.to_scope((domain, codomain)))
+        Expr::FunType(plicity, name, self.arena.alloc((domain, codomain)))
     }
 
     pub fn fun_app(&self, plicity: Plicity, fun: Expr<'arena>, arg: Expr<'arena>) -> Expr<'arena> {
-        Expr::FunApp(plicity, self.scope.to_scope((fun, arg)))
+        Expr::FunApp(plicity, self.arena.alloc((fun, arg)))
     }
 
     pub fn record_proj(&self, head: Expr<'arena>, label: Symbol) -> Expr<'arena> {
-        Expr::RecordProj(self.scope.to_scope(head), label)
+        Expr::RecordProj(self.arena.alloc(head), label)
     }
 
     pub fn if_then_else(
@@ -523,9 +518,9 @@ impl<'arena> ExprBuilder<'arena> {
         r#else: Expr<'arena>,
     ) -> Expr<'arena> {
         Expr::Match(
-            self.scope.to_scope((cond, None)),
-            self.scope
-                .to_scope_from_iter([(Lit::Bool(false), r#else), (Lit::Bool(true), then)]),
+            self.arena.alloc((cond, None)),
+            self.arena
+                .alloc_slice_fill_iter([(Lit::Bool(false), r#else), (Lit::Bool(true), then)]),
         )
     }
 }
