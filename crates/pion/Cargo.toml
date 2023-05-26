@@ -1,26 +1,29 @@
 [package]
-name = "pion"
-version = "0.1.0"
-edition = "2021"
+name                    = "pion"
+version                 = { workspace = true }
+edition                 = { workspace = true }
+rust-version            = { workspace = true }
 
 [dependencies]
-atty = "0.2.14"
-bumpalo = "3.13.0"
-clap = { version = "4.1.3", features = ["derive"] }
-codespan-reporting = "0.11.1"
-pion-core = { version = "0.1.0", path = "../pion-core" }
-pion-source = { version = "0.1.0", path = "../pion-source" }
-pion-surface = { version = "0.1.0", path = "../pion-surface" }
-pretty = "0.12.0"
+pion-core               = { path = "../pion-core" }
+pion-source             = { path = "../pion-source" }
+pion-surface            = { path = "../pion-surface" }
+
+bumpalo                 = { workspace = true }
+codespan-reporting      = { workspace = true }
+pretty                  = { workspace = true }
+
+atty                    = { version = "0.2.14" }
+clap                    = { version = "4.1.3", features = ["derive"] }
 
 [[test]]
-name = "source_tests"
-path = "src/source_tests.rs"
-harness = false
+name                    = "source_tests"
+path                    = "src/source_tests.rs"
+harness                 = false
 
 [dev-dependencies]
-expect-test = "1.4.0"
-libtest-mimic = "0.6.0"
-serde = { version = "1.0.152", features = ["derive"] }
-basic-toml =  "0.1.2"
-walkdir = "2.3.2"
+basic-toml              = { version = "0.1.2" }
+expect-test             = { version = "1.4.0" }
+libtest-mimic           = { version = "0.6.0" }
+serde                   = { version = "1.0.152", features = ["derive"] }
+walkdir                 = { version = "2.3.2" }

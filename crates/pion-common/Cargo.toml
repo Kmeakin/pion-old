@@ -1,7 +1,8 @@
 [package]
-name = "pion-common"
-version = "0.1.0"
-edition = "2021"
+name                    = "pion-common"
+version                 = { workspace = true }
+edition                 = { workspace = true }
+rust-version            = { workspace = true }
 
 [dependencies]
-bumpalo = "3.13.0"
+bumpalo                 = { workspace = true }

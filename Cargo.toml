@@ -1,2 +1,13 @@
 [workspace]
 members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.69.0"
+
+[workspace.dependencies]
+bumpalo                 = { version = "3.13.0" }
+codespan-reporting      = { version = "0.11.1" }
+pretty                  = { version = "0.12.0" }
+ustr                    = { version = "0.9.0" }

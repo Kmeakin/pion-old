@@ -1,18 +1,20 @@
 [package]
-name = "pion-surface"
-version = "0.1.0"
-edition = "2021"
+name                    = "pion-surface"
+version                 = { workspace = true }
+edition                 = { workspace = true }
+rust-version            = { workspace = true }
 
 [dependencies]
-pion-source = { version = "0.1.0", path = "../pion-source" }
+pion-source             = { path = "../pion-source" }
 
-lalrpop-util = "0.20.0"
-lexical = { version = "6.1.1", features = ["power-of-two", "format"] }
-logos = "0.13.0"
-ustr = "0.9.0"
-pretty = "0.12.0"
-codespan-reporting = "0.11.1"
-bumpalo = "3.13.0"
+bumpalo                 = { workspace = true }
+codespan-reporting      = { workspace = true }
+pretty                  = { workspace = true }
+ustr                    = { workspace = true }
+
+lalrpop-util            = { version = "0.20.0" }
+lexical                 = { version = "6.1.1", features = ["power-of-two", "format"] }
+logos                   = { version = "0.13.0" }
 
 [build-dependencies]
-lalrpop = { version = "0.20.0", default-features = false } # disable regex support
+lalrpop                 = { version = "0.20.0", default-features = false } # disable regex support
