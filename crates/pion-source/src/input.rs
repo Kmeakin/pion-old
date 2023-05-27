@@ -3,6 +3,7 @@ use std::ops::Deref;
 
 pub const MAX_LENGTH: usize = u32::MAX as usize;
 
+#[derive(Clone, PartialEq, Eq, Default)]
 pub struct InputString {
     string: String,
 }
@@ -40,4 +41,8 @@ impl fmt::Display for TooBigError {
             self.actual_len
         )
     }
+}
+
+impl fmt::Debug for InputString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::Debug::fmt(&self.string, f) }
 }

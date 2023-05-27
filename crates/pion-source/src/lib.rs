@@ -11,5 +11,8 @@
     clippy::missing_panics_doc
 )]
 
+pub mod db;
 pub mod input;
 pub mod location;
+
+pub type FileId = usize;

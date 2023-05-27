@@ -5,16 +5,19 @@ edition                 = { workspace = true }
 rust-version            = { workspace = true }
 
 [dependencies]
+pion-common             = { path = "../pion-common" }
 pion-source             = { path = "../pion-source" }
 
 bumpalo                 = { workspace = true }
 codespan-reporting      = { workspace = true }
 pretty                  = { workspace = true }
+salsa                   = { workspace = true }
 ustr                    = { workspace = true }
 
 lalrpop-util            = { version = "0.20.0" }
 lexical                 = { version = "6.1.1", features = ["power-of-two", "format"] }
 logos                   = { version = "0.13.0" }
+ouroboros               = { version = "0.15.6" }
 
 [build-dependencies]
 lalrpop                 = { version = "0.20.0", default-features = false } # disable regex support

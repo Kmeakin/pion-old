@@ -11,6 +11,7 @@
     clippy::missing_panics_doc
 )]
 
+pub mod db;
 pub mod pretty;
 pub mod reporting;
 pub mod syntax;

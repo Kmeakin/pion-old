@@ -11,3 +11,4 @@ bumpalo                 = { version = "3.13.0" }
 codespan-reporting      = { version = "0.11.1" }
 pretty                  = { version = "0.12.0" }
 ustr                    = { version = "0.9.0" }
+salsa                   = { version = "0.17.0-pre.2" }

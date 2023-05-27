@@ -1,9 +1,13 @@
 #![warn(clippy::all, clippy::nursery, unused_qualifications)]
 
+use std::sync::Arc;
+
 use bumpalo::Bump;
 use clap::Parser;
 use driver::Driver;
+use pion_source::db::SourceDatabase;
 use pion_source::input::InputString;
+use pion_surface::db::SurfaceDatabase;
 
 mod driver;
 
@@ -14,6 +18,7 @@ enum Opts {
     Elab { file: String },
     ElabModule { file: String },
     Eval { file: String },
+    Check { files: Vec<String> },
 }
 
 fn read_file(file: &String) -> Result<InputString, String> {
@@ -100,5 +105,44 @@ fn main() {
             let expr = elab_ctx.distill_ctx().expr(&expr);
             driver.emit_expr(&arena, &expr);
         }
+        Opts::Check { mut files } => {
+            files.sort_unstable();
+
+            let mut db = CliDatabase::default();
+
+            for (file_id, file) in files.iter().enumerate() {
+                let text = std::fs::read_to_string(file).unwrap_or_default();
+                let text = InputString::new(text).unwrap_or_default();
+                db.set_file_text(file_id, Arc::from(text));
+            }
+
+            let files: Arc<[_]> = Arc::from(files);
+
+            db.set_files(files.clone());
+
+            for (file, _) in files.iter().enumerate() {
+                let module = db.file_module(file);
+                dbg!(module);
+            }
+        }
     };
+}
+
+#[salsa::database(
+    pion_source::db::SourceDatabaseStorage,
+    pion_surface::db::SurfaceDatabaseStorage
+)]
+#[derive(Default)]
+pub struct CliDatabase {
+    storage: salsa::Storage<Self>,
+}
+
+impl salsa::Database for CliDatabase {}
+
+impl salsa::ParallelDatabase for CliDatabase {
+    fn snapshot(&self) -> salsa::Snapshot<Self> {
+        salsa::Snapshot::new(Self {
+            storage: self.storage.snapshot(),
+        })
+    }
 }
