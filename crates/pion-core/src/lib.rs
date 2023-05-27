@@ -15,6 +15,7 @@
     clippy::wildcard_imports
 )]
 
+pub mod db;
 pub mod distill;
 pub mod elab;
 pub mod prim;

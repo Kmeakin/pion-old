@@ -178,9 +178,9 @@ impl<'arena> Body<'arena> {
 
 impl<'arena> Pat<'arena> {
     /// Specialise `self` with respect to the constructor `ctor`.
-    pub fn specialize<'message>(
+    pub fn specialize<'db, 'message>(
         &self,
-        ctx: &mut ElabCtx<'arena, 'message>,
+        ctx: &mut ElabCtx<'db, 'arena, 'message>,
         ctor: &Constructor,
         scrut: &Scrut<'arena>,
     ) -> Option<PatRow<'arena>> {
@@ -219,9 +219,9 @@ impl<'arena> Pat<'arena> {
 
 impl<'arena> PatRow<'arena> {
     /// Specialise `self` with respect to the constructor `ctor`.
-    pub fn specialize<'message>(
+    pub fn specialize<'db, 'message>(
         &self,
-        ctx: &mut ElabCtx<'arena, 'message>,
+        ctx: &mut ElabCtx<'db, 'arena, 'message>,
         ctor: &Constructor,
     ) -> Option<PatRow<'arena>> {
         assert!(!self.entries.is_empty(), "Cannot specialize empty `PatRow`");
@@ -236,9 +236,9 @@ impl<'arena> PatMatrix<'arena> {
     /// Specialise `self` with respect to the constructor `ctor`.
     /// This is the `S` function in *Compiling pattern matching to good decision
     /// trees*
-    pub fn specialize<'message>(
+    pub fn specialize<'db, 'message>(
         &self,
-        ctx: &mut ElabCtx<'arena, 'message>,
+        ctx: &mut ElabCtx<'db, 'arena, 'message>,
         ctor: &Constructor,
     ) -> Self {
         let (rows, indices) = self
@@ -270,7 +270,7 @@ impl<'arena> PatMatrix<'arena> {
     }
 }
 
-impl<'arena, 'message> ElabCtx<'arena, 'message> {
+impl<'db, 'arena, 'message> ElabCtx<'db, 'arena, 'message> {
     pub fn elab_match(
         &mut self,
         mut matrix: PatMatrix<'arena>,

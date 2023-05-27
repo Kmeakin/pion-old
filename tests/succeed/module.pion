@@ -3,3 +3,5 @@
 def foo = false;
 
 def bar : Bool = true;
+
+def foobar = foo;

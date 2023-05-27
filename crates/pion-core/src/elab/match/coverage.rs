@@ -1,7 +1,7 @@
 use super::*;
 
-pub fn check_coverage<'arena>(
-    ctx: &mut ElabCtx<'arena, '_>,
+pub fn check_coverage<'db, 'arena>(
+    ctx: &mut ElabCtx<'db, 'arena, '_>,
     matrix: &PatMatrix<'arena>,
     match_range: ByteRange,
     scrut_range: ByteRange,
@@ -42,8 +42,8 @@ pub fn check_coverage<'arena>(
 /// A row of patterns, *q*, is useful relative to a matrix *m* iff there is a
 /// value matched by `q` and not matched by *m*. This is the `U` function in
 /// *Warnings for pattern matching*
-fn is_useful<'arena>(
-    ctx: &mut ElabCtx<'arena, '_>,
+fn is_useful<'db, 'arena>(
+    ctx: &mut ElabCtx<'db, 'arena, '_>,
     matrix: &PatMatrix<'arena>,
     row: &PatRow<'arena>,
 ) -> bool {
@@ -101,8 +101,8 @@ fn is_useful<'arena>(
     }
 }
 
-fn is_useful_ctor<'arena>(
-    ctx: &mut ElabCtx<'arena, '_>,
+fn is_useful_ctor<'db, 'arena>(
+    ctx: &mut ElabCtx<'db, 'arena, '_>,
     matrix: &PatMatrix<'arena>,
     row: &PatRow<'arena>,
     ctor: &Constructor<'arena>,

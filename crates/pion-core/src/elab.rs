@@ -1,9 +1,10 @@
 use bumpalo::Bump;
-use pion_common::slice_vec::SliceVec;
 use pion_source::location::ByteRange;
+use pion_source::FileId;
 use pion_surface::syntax::{self as surface, Symbol};
 
 use self::unify::{PartialRenaming, UnifyCtx};
+use crate::db::CoreDatabase;
 use crate::distill::DistillCtx;
 use crate::env::{EnvLen, Index, Level, SharedEnv, UniqueEnv};
 use crate::reporting::Message;
@@ -16,8 +17,10 @@ mod pat;
 pub mod unify;
 
 /// Elaboration context.
-pub struct ElabCtx<'arena, 'message> {
+pub struct ElabCtx<'db, 'arena, 'message> {
+    db: &'db dyn CoreDatabase,
     arena: &'arena Bump,
+    file: FileId,
     temp_arena: Bump,
     local_env: LocalEnv<'arena>,
     meta_env: MetaEnv<'arena>,
@@ -25,10 +28,17 @@ pub struct ElabCtx<'arena, 'message> {
     on_message: &'message mut dyn FnMut(Message),
 }
 
-impl<'arena, 'message> ElabCtx<'arena, 'message> {
-    pub fn new(arena: &'arena Bump, on_message: &'message mut dyn FnMut(Message)) -> Self {
+impl<'db, 'arena, 'message> ElabCtx<'db, 'arena, 'message> {
+    pub fn new(
+        db: &'db dyn CoreDatabase,
+        arena: &'arena Bump,
+        file: FileId,
+        on_message: &'message mut dyn FnMut(Message),
+    ) -> Self {
         Self {
+            db,
             arena,
+            file,
             temp_arena: Bump::new(),
             local_env: LocalEnv::default(),
             meta_env: MetaEnv::default(),
@@ -288,7 +298,7 @@ impl<'arena> MetaEnv<'arena> {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MetaSource {
     PlaceholderType(ByteRange),
     PlaceholderExpr(ByteRange),
@@ -303,51 +313,35 @@ pub enum MetaSource {
     MatchType(ByteRange),
 }
 
-pub fn elab_module<'arena>(
-    module_arena: &'arena Bump,
-    module: &surface::Module<ByteRange>,
+pub fn elab_def<'db, 'surface, 'core>(
+    db: &'db dyn CoreDatabase,
+    arena: &'core Bump,
     on_message: &'_ mut dyn FnMut(Message),
-) -> Module<'arena> {
-    let mut defs = SliceVec::new(
-        module_arena,
-        module
-            .items
-            .iter()
-            .filter(|item| matches!(item, surface::Item::Def(_)))
-            .count(),
-    );
+    file: FileId,
+    def: surface::Def<'surface>,
+) -> Def<'core> {
+    let temp_arena = Bump::new();
+    let mut elab_ctx = ElabCtx::new(db, &temp_arena, file, on_message);
+    let (expr, r#type) = match def.r#type {
+        Some(r#type) => {
+            let r#type = elab_ctx.check(&r#type, &Type::TYPE);
+            let type_value = elab_ctx.eval_env().eval(&r#type);
+            let expr = elab_ctx.check(&def.expr, &type_value);
 
-    for item in module.items {
-        let item_arena = Bump::new();
-        let mut elab_ctx = ElabCtx::new(&item_arena, on_message);
-
-        match item {
-            surface::Item::Def(def) => {
-                let (expr, r#type) = match def.r#type {
-                    Some(r#type) => {
-                        let r#type = elab_ctx.check(&r#type, &Type::TYPE);
-                        let type_value = elab_ctx.eval_env().eval(&r#type);
-                        let expr = elab_ctx.check(&def.expr, &type_value);
-
-                        (expr, r#type)
-                    }
-                    None => {
-                        let (expr, type_value) = elab_ctx.synth(&def.expr);
-                        let r#type = elab_ctx.quote_env().quote(&type_value);
-
-                        (expr, r#type)
-                    }
-                };
-
-                let r#type = elab_ctx.zonk_env(module_arena).zonk(&r#type);
-                let expr = elab_ctx.zonk_env(module_arena).zonk(&expr);
-                let def = Def::new(def.name, r#type, expr);
-                defs.push(def);
-            }
+            (expr, r#type)
         }
+        None => {
+            let (expr, type_value) = elab_ctx.synth(&def.expr);
+            let r#type = elab_ctx.quote_env().quote(&type_value);
 
-        elab_ctx.report_unsolved_metas();
-    }
+            (expr, r#type)
+        }
+    };
 
-    Module { defs: defs.into() }
+    let r#type = elab_ctx.zonk_env(arena).zonk(&r#type);
+    let expr = elab_ctx.zonk_env(arena).zonk(&expr);
+
+    elab_ctx.report_unsolved_metas();
+
+    Def::new(def.name, r#type, expr)
 }

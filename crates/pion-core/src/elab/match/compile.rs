@@ -5,8 +5,8 @@ use super::*;
 /// Compilation of pattern matrices to decision trees.
 /// This is the `CC` function in *Compiling pattern matching to good decision
 /// trees*.
-pub fn compile_match<'arena>(
-    ctx: &mut ElabCtx<'arena, '_>,
+pub fn compile_match<'db, 'arena>(
+    ctx: &mut ElabCtx<'db, 'arena, '_>,
     matrix: &mut PatMatrix<'arena>,
     bodies: &[Body<'arena>],
     mut shift_amount: EnvLen,

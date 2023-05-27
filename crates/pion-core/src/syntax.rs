@@ -153,6 +153,71 @@ impl<'arena> Expr<'arena> {
             }
         }
     }
+
+    pub fn copy<'out_arena>(out_arena: &'out_arena Bump, expr: &Expr<'arena>) -> Expr<'out_arena> {
+        match expr {
+            Expr::Error => Expr::Error,
+            Expr::Lit(lit) => Expr::Lit(*lit),
+            Expr::Prim(prim) => Expr::Prim(*prim),
+            Expr::Local(var) => Expr::Local(*var),
+            Expr::Meta(var) => Expr::Meta(*var),
+            Expr::InsertedMeta(var, infos) => {
+                Expr::InsertedMeta(*var, out_arena.alloc_slice_copy(infos))
+            }
+            Expr::Let((def, body)) => {
+                let def = LetDef {
+                    name: def.name,
+                    r#type: Expr::copy(out_arena, &def.r#type),
+                    expr: Expr::copy(out_arena, &def.expr),
+                };
+                let body = Expr::copy(out_arena, body);
+                Expr::Let(out_arena.alloc((def, body)))
+            }
+            Expr::FunType(plicity, name, (domain, codomain)) => {
+                let domain = Expr::copy(out_arena, domain);
+                let codomain = Expr::copy(out_arena, codomain);
+                Expr::FunType(*plicity, *name, out_arena.alloc((domain, codomain)))
+            }
+            Expr::FunLit(plicity, name, (domain, body)) => {
+                let domain = Expr::copy(out_arena, domain);
+                let body = Expr::copy(out_arena, body);
+                Expr::FunLit(*plicity, *name, out_arena.alloc((domain, body)))
+            }
+            Expr::FunApp(plicity, (fun, arg)) => {
+                let fun = Expr::copy(out_arena, fun);
+                let arg = Expr::copy(out_arena, arg);
+                Expr::FunApp(*plicity, out_arena.alloc((fun, arg)))
+            }
+            Expr::RecordType(labels, exprs) => {
+                let labels = out_arena.alloc_slice_copy(labels);
+                let exprs = out_arena
+                    .alloc_slice_fill_iter(exprs.iter().map(|exprs| Expr::copy(out_arena, exprs)));
+                Expr::RecordType(labels, exprs)
+            }
+            Expr::RecordLit(labels, exprs) => {
+                let labels = out_arena.alloc_slice_copy(labels);
+                let exprs = out_arena
+                    .alloc_slice_fill_iter(exprs.iter().map(|expr| Expr::copy(out_arena, expr)));
+                Expr::RecordLit(labels, exprs)
+            }
+            Expr::RecordProj(head, label) => {
+                let head = Expr::copy(out_arena, head);
+                Expr::RecordProj(out_arena.alloc(head), *label)
+            }
+            Expr::Match((scrut, default), cases) => {
+                let scrut = Expr::copy(out_arena, scrut);
+                let cases = out_arena.alloc_slice_fill_iter(cases.iter().map(|(lit, expr)| {
+                    let expr = Expr::copy(out_arena, expr);
+                    (*lit, expr)
+                }));
+                let default = default.map(|(name, expr)| {
+                    let expr = Expr::copy(out_arena, &expr);
+                    (name, expr)
+                });
+                Expr::Match(out_arena.alloc((scrut, default)), cases)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

@@ -4,7 +4,7 @@ use super::expr::synth_lit;
 use super::r#match::Scrut;
 use super::*;
 
-impl<'arena, 'message> ElabCtx<'arena, 'message> {
+impl<'db, 'arena, 'message> ElabCtx<'db, 'arena, 'message> {
     pub fn synth_ann_pat(
         &mut self,
         pat: &surface::Pat,

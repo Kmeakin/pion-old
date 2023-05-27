@@ -5,7 +5,7 @@ use pion_surface::syntax::{Plicity, Symbol};
 use crate::elab::unify::{RenameError, SpineError, UnifyError};
 use crate::elab::MetaSource;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
     UnboundName {
         range: ByteRange,

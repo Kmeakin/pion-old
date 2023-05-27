@@ -32,7 +32,7 @@ pub struct ArenaAndModule {
     arena: bumpalo::Bump,
     #[borrows(arena)]
     #[covariant]
-    module: syntax::Module<'this>,
+    pub module: syntax::Module<'this>,
 }
 
 impl PartialEq for ArenaAndModule {
@@ -48,5 +48,4 @@ impl fmt::Debug for ArenaAndModule {
 }
 
 // TODO: is this safe?
-unsafe impl Send for ArenaAndModule {}
 unsafe impl Sync for ArenaAndModule {}
