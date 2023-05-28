@@ -126,6 +126,7 @@ impl<'arena, 'env> DistillCtx<'arena, 'env> {
         let builder = self.builder();
         match expr {
             Expr::Error => surface::Expr::Error(()),
+            Expr::Def(var) => todo!(),
             Expr::Local(var) => match self.local_names.get_index(*var) {
                 Some(Some(name)) => surface::Expr::Ident((), *name),
                 Some(None) => unreachable!("Referenced local variable without name: {var:?}"),

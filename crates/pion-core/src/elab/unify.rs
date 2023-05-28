@@ -5,8 +5,9 @@ use super::*;
 use crate::env::{Level, SliceEnv};
 
 /// Unification context.
-pub struct UnifyCtx<'arena, 'env> {
-    /// Scoped arena for storing [renamed][Context::rename] exprs.
+pub struct UnifyCtx<'db, 'arena, 'env> {
+    db: &'db dyn CoreDatabase,
+    /// Arena for storing [renamed][Context::rename] exprs.
     arena: &'arena Bump,
     /// A renaming that is used when solving metavariables using pattern
     /// unification. We store it in the parent context, re-initialising it on
@@ -210,14 +211,16 @@ pub enum RenameError {
     InfiniteSolution,
 }
 
-impl<'arena, 'env> UnifyCtx<'arena, 'env> {
+impl<'db, 'arena, 'env> UnifyCtx<'db, 'arena, 'env> {
     pub fn new(
+        db: &'db dyn CoreDatabase,
         arena: &'arena Bump,
         renaming: &'env mut PartialRenaming,
         local_env: EnvLen,
         meta_values: &'env mut SliceEnv<Option<Value<'arena>>>,
     ) -> Self {
         Self {
+            db,
             arena,
             renaming,
             local_env,
@@ -227,7 +230,9 @@ impl<'arena, 'env> UnifyCtx<'arena, 'env> {
 
     fn expr_builder(&self) -> ExprBuilder<'arena> { ExprBuilder::new(self.arena) }
 
-    fn elim_env(&self) -> ElimEnv<'arena, '_> { ElimEnv::new(self.arena, self.meta_values) }
+    fn elim_env(&self) -> ElimEnv<'db, 'arena, '_> {
+        ElimEnv::new(self.db, self.arena, self.meta_values)
+    }
 
     /// Unify two values, updating the solution environment if necessary.
     pub fn unify(

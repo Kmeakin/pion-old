@@ -58,9 +58,8 @@ impl<'db, 'arena, 'message> ElabCtx<'db, 'arena, 'message> {
                 if let Some(def_id) = crate::db::lookup_name(self.db, self.file, *name) {
                     let (owned_def, _) = self.db.def_core(self.file, def_id);
                     let def = &owned_def.get();
-                    let expr = Expr::copy(self.arena, &def.expr);
                     let r#type = Expr::copy(self.arena, &def.r#type);
-                    return (expr, self.eval_env().eval(&r#type));
+                    return (Expr::Def(def_id), self.eval_env().eval(&r#type));
                 }
 
                 self.emit_message(Message::UnboundName {

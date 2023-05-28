@@ -88,28 +88,29 @@ impl<'db, 'arena, 'message> ElabCtx<'db, 'arena, 'message> {
         )
     }
 
-    pub fn elim_env(&self) -> ElimEnv<'arena, '_> {
-        ElimEnv::new(self.arena, &self.meta_env.values)
+    pub fn elim_env(&self) -> ElimEnv<'db, 'arena, '_> {
+        ElimEnv::new(self.db, self.arena, &self.meta_env.values)
     }
 
-    pub fn eval_env(&mut self) -> EvalEnv<'arena, '_> {
-        let elim_env = ElimEnv::new(self.arena, &self.meta_env.values);
+    pub fn eval_env(&mut self) -> EvalEnv<'db, 'arena, '_> {
+        let elim_env = ElimEnv::new(self.db, self.arena, &self.meta_env.values);
         elim_env.eval_env(&mut self.local_env.values)
     }
 
-    pub fn quote_env(&self) -> QuoteEnv<'arena, 'arena, '_> {
+    pub fn quote_env(&self) -> QuoteEnv<'db, 'arena, 'arena, '_> {
         QuoteEnv::new(self.arena, self.elim_env(), self.local_env.values.len())
     }
 
     pub fn zonk_env<'out_arena>(
         &mut self,
         arena: &'out_arena Bump,
-    ) -> ZonkEnv<'out_arena, 'arena, '_> {
+    ) -> ZonkEnv<'db, 'out_arena, 'arena, '_> {
         ZonkEnv::new(arena, self.eval_env())
     }
 
-    pub fn unifiy_ctx(&mut self) -> UnifyCtx<'arena, '_> {
+    pub fn unifiy_ctx(&mut self) -> UnifyCtx<'db, 'arena, '_> {
         UnifyCtx::new(
+            self.db,
             self.arena,
             &mut self.renaming,
             self.local_env.len(),
@@ -133,7 +134,7 @@ impl<'db, 'arena, 'message> ElabCtx<'db, 'arena, 'message> {
     }
 
     fn pretty_value(&mut self, value: &Value) -> String {
-        let elim_env = ElimEnv::new(&self.temp_arena, &self.meta_env.values);
+        let elim_env = ElimEnv::new(self.db, &self.temp_arena, &self.meta_env.values);
         let mut quote_env = QuoteEnv::new(&self.temp_arena, elim_env, self.local_env.values.len());
         let mut distill_ctx = DistillCtx::new(
             &self.temp_arena,

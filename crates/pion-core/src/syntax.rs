@@ -7,6 +7,7 @@ use pion_common::arena::yoke::Yokeable;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::{Plicity, Symbol};
 
+use crate::db::DefId;
 use crate::env::{EnvLen, Index, Level, SharedEnv};
 use crate::prim::Prim;
 
@@ -38,6 +39,7 @@ pub enum Expr<'arena> {
     Error,
     Lit(Lit),
     Prim(Prim),
+    Def(DefId),
     Local(Index),
     Meta(Level),
     InsertedMeta(Level, &'arena [BinderInfo]),
@@ -62,7 +64,12 @@ impl<'arena> Expr<'arena> {
 
     pub fn is_atomic(&self) -> bool {
         match self {
-            Expr::Error | Expr::Lit(_) | Expr::Prim(_) | Expr::Local(_) | Expr::Meta(_) => true,
+            Expr::Error
+            | Expr::Lit(_)
+            | Expr::Prim(_)
+            | Expr::Def(_)
+            | Expr::Local(_)
+            | Expr::Meta(_) => true,
             Expr::RecordLit(labels, ..) | Expr::RecordType(labels, ..) => labels.is_empty(),
             Expr::InsertedMeta(..)
             | Expr::Let(_)
@@ -94,6 +101,7 @@ impl<'arena> Expr<'arena> {
             Expr::Error
             | Expr::Lit(_)
             | Expr::Prim(_)
+            | Expr::Def(_)
             | Expr::Local(_)
             | Expr::Meta(_)
             | Expr::InsertedMeta(..) => *self,
@@ -162,6 +170,7 @@ impl<'arena> Expr<'arena> {
             Expr::Error => Expr::Error,
             Expr::Lit(lit) => Expr::Lit(*lit),
             Expr::Prim(prim) => Expr::Prim(*prim),
+            Expr::Def(var) => Expr::Def(*var),
             Expr::Local(var) => Expr::Local(*var),
             Expr::Meta(var) => Expr::Meta(*var),
             Expr::InsertedMeta(var, infos) => {
@@ -477,6 +486,7 @@ impl<'a, 'arena> Subexprs<'a, 'arena> {
             Expr::Error
             | Expr::Lit(_)
             | Expr::Prim(_)
+            | Expr::Def(_)
             | Expr::Local(_)
             | Expr::Meta(_)
             | Expr::InsertedMeta(..) => {}

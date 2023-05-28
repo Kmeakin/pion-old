@@ -3,22 +3,26 @@ use either::*;
 use pion_common::slice_vec::SliceVec;
 use pion_surface::syntax::{Plicity, Symbol};
 
+use crate::db::CoreDatabase;
 use crate::env::{EnvLen, Index, Level, SharedEnv, SliceEnv};
 use crate::syntax::*;
 
-pub struct EvalEnv<'arena, 'env> {
+pub struct EvalEnv<'db, 'arena, 'env> {
+    db: &'db dyn CoreDatabase,
     arena: &'arena Bump,
-    elim_env: ElimEnv<'arena, 'env>,
+    elim_env: ElimEnv<'db, 'arena, 'env>,
     local_values: &'env mut SharedEnv<Value<'arena>>,
 }
 
-impl<'arena, 'env> EvalEnv<'arena, 'env> {
+impl<'db, 'arena, 'env> EvalEnv<'db, 'arena, 'env> {
     pub fn new(
+        db: &'db dyn CoreDatabase,
         arena: &'arena Bump,
-        elim_env: ElimEnv<'arena, 'env>,
+        elim_env: ElimEnv<'db, 'arena, 'env>,
         local_values: &'env mut SharedEnv<Value<'arena>>,
     ) -> Self {
         Self {
+            db,
             arena,
             elim_env,
             local_values,
@@ -38,6 +42,11 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
             Expr::Error => Value::ERROR,
             Expr::Lit(lit) => Value::Lit(*lit),
             Expr::Prim(prim) => Value::prim(*prim),
+            Expr::Def(def) => {
+                let (yoked, _) = self.db.def_core(0, *def);
+                let expr = Expr::copy(self.arena, &yoked.get().expr);
+                self.eval(&expr)
+            }
             Expr::Local(var) => self.get_local(*var).clone(),
             Expr::Meta(var) => match self.elim_env.get_meta(*var) {
                 Some(value) => value.clone(),
@@ -108,14 +117,23 @@ impl<'arena, 'env> EvalEnv<'arena, 'env> {
 }
 
 #[derive(Clone, Copy)]
-pub struct ElimEnv<'arena, 'env> {
+pub struct ElimEnv<'db, 'arena, 'env> {
+    db: &'db dyn CoreDatabase,
     arena: &'arena Bump,
     meta_values: &'env SliceEnv<Option<Value<'arena>>>,
 }
 
-impl<'arena, 'env> ElimEnv<'arena, 'env> {
-    pub fn new(arena: &'arena Bump, meta_values: &'env SliceEnv<Option<Value<'arena>>>) -> Self {
-        Self { arena, meta_values }
+impl<'db, 'arena, 'env> ElimEnv<'db, 'arena, 'env> {
+    pub fn new(
+        db: &'db dyn CoreDatabase,
+        arena: &'arena Bump,
+        meta_values: &'env SliceEnv<Option<Value<'arena>>>,
+    ) -> Self {
+        Self {
+            db,
+            arena,
+            meta_values,
+        }
     }
 
     fn get_meta<'this: 'env>(&'this self, var: Level) -> &'env Option<Value<'arena>> {
@@ -129,8 +147,8 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
     pub fn eval_env(
         &self,
         local_values: &'env mut SharedEnv<Value<'arena>>,
-    ) -> EvalEnv<'arena, 'env> {
-        EvalEnv::new(self.arena, *self, local_values)
+    ) -> EvalEnv<'db, 'arena, 'env> {
+        EvalEnv::new(self.db, self.arena, *self, local_values)
     }
 
     /// Bring a value up-to-date with any new unification solutions that
@@ -263,16 +281,16 @@ impl<'arena, 'env> ElimEnv<'arena, 'env> {
 ///
 /// This environment keeps track of the length of the local environment,
 /// and the values of metavariables, allowing for quotation.
-pub struct QuoteEnv<'out_arena, 'arena, 'env> {
+pub struct QuoteEnv<'db, 'out_arena, 'arena, 'env> {
     arena: &'out_arena Bump,
-    elim_env: ElimEnv<'arena, 'env>,
+    elim_env: ElimEnv<'db, 'arena, 'env>,
     local_env: EnvLen,
 }
 
-impl<'out_arena, 'arena, 'env> QuoteEnv<'out_arena, 'arena, 'env> {
+impl<'db, 'out_arena, 'arena, 'env> QuoteEnv<'db, 'out_arena, 'arena, 'env> {
     pub fn new(
         arena: &'out_arena Bump,
-        elim_env: ElimEnv<'arena, 'env>,
+        elim_env: ElimEnv<'db, 'arena, 'env>,
         local_env: EnvLen,
     ) -> Self {
         Self {
@@ -396,19 +414,19 @@ impl<'out_arena, 'arena, 'env> QuoteEnv<'out_arena, 'arena, 'env> {
     fn pop_local(&mut self) { self.local_env.pop(); }
 }
 
-pub struct ZonkEnv<'out_arena, 'arena, 'env> {
+pub struct ZonkEnv<'db, 'out_arena, 'arena, 'env> {
     arena: &'out_arena Bump,
-    eval_env: EvalEnv<'arena, 'env>,
+    eval_env: EvalEnv<'db, 'arena, 'env>,
 }
 
-impl<'out_arena, 'arena, 'env> ZonkEnv<'out_arena, 'arena, 'env> {
-    pub fn new(arena: &'out_arena Bump, eval_env: EvalEnv<'arena, 'env>) -> Self {
+impl<'db, 'out_arena, 'arena, 'env> ZonkEnv<'db, 'out_arena, 'arena, 'env> {
+    pub fn new(arena: &'out_arena Bump, eval_env: EvalEnv<'db, 'arena, 'env>) -> Self {
         Self { arena, eval_env }
     }
 
     fn expr_builder(&self) -> ExprBuilder<'out_arena> { ExprBuilder::new(self.arena) }
 
-    fn quote_env(&self) -> QuoteEnv<'out_arena, 'arena, 'env> {
+    fn quote_env(&self) -> QuoteEnv<'db, 'out_arena, 'arena, 'env> {
         QuoteEnv::new(
             self.arena,
             self.eval_env.elim_env,
@@ -422,6 +440,7 @@ impl<'out_arena, 'arena, 'env> ZonkEnv<'out_arena, 'arena, 'env> {
             Expr::Error => Expr::Error,
             Expr::Lit(lit) => Expr::Lit(*lit),
             Expr::Prim(prim) => Expr::Prim(*prim),
+            Expr::Def(var) => Expr::Def(*var),
             Expr::Local(var) => Expr::Local(*var),
             Expr::InsertedMeta(var, infos) => match self.eval_env.elim_env.get_meta(*var) {
                 None => Expr::InsertedMeta(
