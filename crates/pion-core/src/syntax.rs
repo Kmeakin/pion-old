@@ -2,6 +2,8 @@ use std::ops::ControlFlow;
 
 use bumpalo::Bump;
 use internal_iterator::InternalIterator;
+use pion_common::arena::yoke;
+use pion_common::arena::yoke::Yokeable;
 use pion_source::location::ByteRange;
 use pion_surface::syntax::{Plicity, Symbol};
 
@@ -18,6 +20,7 @@ impl<'arena> Module<'arena> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Yokeable)]
 pub struct Def<'arena> {
     pub name: Symbol,
     pub r#type: Expr<'arena>,

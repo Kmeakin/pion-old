@@ -10,7 +10,6 @@ pion-source             = { path = "../pion-source" }
 
 bumpalo                 = { workspace = true }
 codespan-reporting      = { workspace = true }
-ouroboros               = { workspace = true }
 pretty                  = { workspace = true }
 salsa                   = { workspace = true }
 ustr                    = { workspace = true }

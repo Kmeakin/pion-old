@@ -1,6 +1,8 @@
 use core::fmt;
 
 use bumpalo::Bump;
+use pion_common::arena::yoke;
+use pion_common::arena::yoke::Yokeable;
 pub use pion_source::input::InputString;
 use pion_source::location::{BytePos, ByteRange};
 
@@ -10,6 +12,7 @@ use crate::tokens::{self, Token};
 pub type Symbol = ustr::Ustr;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Yokeable)]
 pub struct Module<'arena, Extra = ByteRange> {
     pub items: &'arena [Item<'arena, Extra>],
 }

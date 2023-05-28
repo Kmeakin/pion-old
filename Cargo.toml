@@ -12,4 +12,4 @@ codespan-reporting      = { version = "0.11.1" }
 pretty                  = { version = "0.12.0" }
 ustr                    = { version = "0.9.0" }
 salsa                   = { version = "0.17.0-pre.2" }
-ouroboros               = { version = "0.15.6" }
+yoke                    = { version = "0.7.1", features = ["derive"] }
