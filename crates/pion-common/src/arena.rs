@@ -53,5 +53,15 @@ where
 
 // TODO: is this safe?
 #[allow(clippy::non_send_fields_in_send_ty)]
-unsafe impl<T> Send for ArenaAnd<T> where T: for<'a> Yokeable<'a> {}
-unsafe impl<T> Sync for ArenaAnd<T> where T: for<'a> Yokeable<'a> {}
+unsafe impl<T> Send for ArenaAnd<T>
+where
+    T: for<'a> Yokeable<'a>,
+    T: Send,
+{
+}
+unsafe impl<T> Sync for ArenaAnd<T>
+where
+    T: for<'a> Yokeable<'a>,
+    T: Sync,
+{
+}
