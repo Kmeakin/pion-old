@@ -1,3 +1,5 @@
+use std::io::IsTerminal;
+
 use bumpalo::Bump;
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFiles;
@@ -44,7 +46,7 @@ impl Driver {
     }
 
     pub fn emit_diagnostic(&self, diagnostic: Diagnostic<usize>) {
-        let color = if atty::is(atty::Stream::Stderr) {
+        let color = if std::io::stderr().is_terminal() {
             ColorChoice::Auto
         } else {
             ColorChoice::Never
